@@ -30,7 +30,7 @@ updater checks remain pending. Do not use an older build as the final release.
 
 
 ```sh
-./build.sh                                  # -> build/dakhmeh.fwsc (identity FM-1_966, version 0.2-dev)
+./build.sh                                  # -> build/dakhmeh.fwsc (identity FM-1_966, the version in VERSION)
 ./build.sh --release 0.2                    # -> build/dakhmeh-0.2.fwsc, the version "0.2" on the screen
 py tools/fm1_install.py build/dakhmeh.fwsc    # install it over USB (asks first); --info: what the FM-1 runs
 ```
@@ -53,7 +53,21 @@ node web/test_web.mjs                       # after tests/run_host.sh: the brows
 cd web/dist && python3 -m http.server 8000  # then open http://localhost:8000/ (or /editor.html)
 ```
 
-`APP_VER=0.2-dev web/build_web.sh` puts the version on the browser build's screen.
+The browser build, host mode and the firmware all show the version in `VERSION` (0.3); `APP_VER=… web/build_web.sh` overrides it for one build.
+
+## The site: emulator, editor, installer (GitHub Pages)
+
+```sh
+./build.sh --release $(cat VERSION)         # the package; tools/make_site.py checks it is VERSION's
+web/build_web.sh                            # the emulator and editor (VERSION on the screen) and install.html
+node web/test_install.mjs                   # the installer against a simulated FM-1, with the real package
+python3 tools/make_site.py build/dakhmeh-$(cat VERSION).fwsc build/site
+```
+
+`build/site` is what the `gh-pages` branch holds: <https://jrdntnnr.github.io/DAKHMEH-FM-1/> (the emulator),
+`editor.html`, `install.html`. The installer (`web/fm1ota.js`, `web/fm1pkg.js`) is Felucca's update protocol over
+WebMIDI, by way of SARDAB; it reads `firmware/latest.json` and installs only that package, to Felucca's loader
+(`ota-FM-1_900`).
 
 ## The factory samples
 

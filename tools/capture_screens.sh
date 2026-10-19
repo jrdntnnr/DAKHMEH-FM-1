@@ -3,7 +3,7 @@ set -eu
 cd "$(dirname "$0")/.."
 mkdir -p build/screens docs/screens/dakhmeh
 case "$(uname -s)" in Darwin) set -- '-Dsection(x)=unused';; *) set --;; esac
-cc "$@" -O2 -Wno-unused-function '-DAPP_VER="0.2-dev"' -Ifirmware/src -Ifirmware/gen -o build/screens/capture tools/capture_screens.c
+cc "$@" -O2 -Wno-unused-function -DAPP_VER="\"$(cat VERSION)\"" -Ifirmware/src -Ifirmware/gen -o build/screens/capture tools/capture_screens.c
 build/screens/capture
 python3 - <<'PY'
 from pathlib import Path

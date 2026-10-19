@@ -51,7 +51,8 @@ SDK_SHA256 = {
 PRODUCT = "FM-1_966"                # GR!MM 1.x: 966, every release (FM-1_9NN: the installers resume its loader; the hub's
                                     # other firmwares hold 950, 95x, 961, so not Dinghy's 9 + minor); Dinghy is 99N
 VERSION = None                      # APP_VER for release builds (else DEFAULT_VERSION)
-DEFAULT_VERSION = "0.2-dev"
+DEFAULT_VERSION = (Path(__file__).resolve().parent.parent / "VERSION").read_text().strip()   # (VERSION: the
+                                    # one version, also the emulator's and host mode's)
 
 
 def toolchain():

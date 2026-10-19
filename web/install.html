@@ -1,0 +1,173 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments (the installer: Felucca's web/index_pkg.html,
+     by way of SARDAB / GHOULBOX's); DAKHMEH changes. GPL-3.0. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install DAKHMEH</title>
+<meta name="description" content="Install DAKHMEH, a firmware for the M-VAVE FM-1, from the browser over USB-MIDI.">
+<style>
+:root { --bg: #111112; --part: #2a2a2d; --edge: #3a3a3e; --fg: #d6d6d8; --dim: #8a8a8e; --lit: #fff4d6;
+        --warn: #ff9a1f; color-scheme: dark; }
+html, body { background: var(--bg); }
+body { margin: 0; color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
+main { max-width: 560px; margin: 0 auto; padding: 40px 16px; }
+a { color: inherit; }
+h1 { font-size: 24px; font-weight: 600; margin: 0 0 4px; color: var(--lit); }
+.sub { color: var(--dim); margin: 0 0 24px; }
+p { margin: 0 0 14px; }
+.small { color: var(--dim); font-size: 13px; }
+.warn { border-left: 3px solid var(--warn); padding: 8px 12px; background: var(--part); }
+ol { padding-left: 20px; margin: 0 0 14px; }
+button { font: inherit; background: var(--fg); color: #111; border: 0; border-radius: 6px; padding: 10px 26px; cursor: pointer; }
+button:disabled { opacity: .35; cursor: default; }
+progress { width: 100%; height: 6px; margin-top: 16px; accent-color: var(--warn); }
+#status { margin-top: 12px; min-height: 1.6em; }
+pre { color: var(--dim); font-size: 12px; white-space: pre-wrap; margin-top: 12px; max-height: 12em; overflow: auto; }
+nav { margin-bottom: 28px; font-size: 13px; color: var(--dim); }
+nav a { margin-right: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <nav><a href="./">Emulator</a><a href="editor.html">Editor</a><a href="https://github.com/jrdntnnr/DAKHMEH-FM-1">Source</a></nav>
+  <h1>Install DAKHMEH <span id="ver"></span></h1>
+  <p class="sub">دخمه · desert instruments and maqam tuning for the M-VAVE FM-1</p>
+  <p class="warn"><b>Pre-release.</b> This build has not been tested on hardware yet, including key velocity sensing.
+    Use it at your own risk; the author accepts no responsibility if your FM-1 is damaged or misbehaves.
+    <a href="https://github.com/jrdntnnr/DAKHMEH-FM-1/releases">Release notes</a>.</p>
+  <ol>
+    <li><b>Back up first:</b> open the <a href="editor.html">editor</a>, connect, and save a backup (sounds, slots,
+      settings).</li>
+    <li>Connect the FM-1 directly to the computer with a USB data cable, and close other apps that use MIDI.</li>
+    <li>Press <b>Install</b> and allow MIDI (SysEx) when Chrome or Edge asks. Do not unplug while it writes (about two
+      minutes).</li>
+  </ol>
+  <p><button id="go" disabled>Install</button></p>
+  <progress id="bar" max="100" value="0"></progress>
+  <p id="status"></p>
+  <pre id="log"></pre>
+  <p class="small"><b>If it goes wrong:</b> an interrupted install resumes: replug and press Install again (the FM-1
+    stays in update mode until it is finished). If DAKHMEH crashes at start, hold <b>OCT−</b> while switching on for the
+    USB rescue and install again. If even that is gone, the FM-1's boot ROM still updates with
+    <a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener">FM-1-transporter</a>.
+    From a terminal: <code>python3 tools/fm1_install.py dakhmeh-<span class="v"></span>.fwsc</code>.</p>
+  <p class="small">The installer is Felucca's (Leo Kuroshita, <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton
+    Instruments</a>), by way of SARDAB. The package holds DAKHMEH (GPL-3.0) and three JieLi AC79 SDK files
+    (Apache-2.0): <a href="LICENSING.md">LICENSING.md</a>, <a href="LICENSE">GPL-3.0</a>,
+    <a href="LICENSES/">all licences</a>. GPL-3.0, no warranty.
+    <a href="https://github.com/jrdntnnr/DAKHMEH-FM-1">Source</a>. M-VAVE and FM-1 are trademarks of their respective
+    owners; DAKHMEH is not affiliated with or endorsed by them.</p>
+</main>
+<script type="module">
+import { productOf, logicalImage } from "./fm1pkg.js";
+import { Updater, SARDAB_LOADER as FELUCCA_LOADER, STOCK_LOADER } from "./fm1ota.js";   // (DAKHMEH's loader: Felucca's)
+
+const $ = (id) => document.getElementById(id);
+const T = {
+  start: "Starting", verify: "Verifying", loader: "Switching to update mode", write: "Writing",
+  reboot: "Restarting", done: "Done. DAKHMEH is installed.", stopped: "Stopped. Replug the USB cable and press Install again.",
+  error: "Error: ", nomidi: "This browser cannot do it. Open the page in Chrome or Edge.", loadfail: "Could not load: ",
+  denied: "MIDI (SysEx) access was not allowed. Allow MIDI in the site settings (address bar) and press Install again.",
+  notfound: "FM-1 not found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
+  model: "The connected device is not an FM-1.",
+  lost: "The USB connection was lost. Replug it and press Install again.",
+  reload: "Reloading the page to reach the FM-1 in update mode…", resuming: "Continuing the update…",
+  noloader: "The FM-1 in update mode was not found. Replug the USB cable and press Install again (it stays in update mode until it is finished).",
+  noreturn: "The FM-1 did not come back. Power-cycle it.",
+  mismatch: "Written, but the FM-1 reports another firmware: ",
+  badpkg: "The file to install is damaged. Reload the page.",
+  loaderStock: "The FM-1 is waiting in M-VAVE's official update mode, which only accepts the official FM-1.fwsc. Nothing was sent. Use M-VAVE's updater to finish that first.",
+  loaderUnknown: "The FM-1 is in an update mode this installer does not know. Nothing was sent. Please report it on GitHub with this name: ",
+  leave: "Writing. Do not close the page.",
+};
+const sayK = (k, arg = "") => { $("status").textContent = T[k] + arg; };
+const say = (txt) => { $("status").textContent = txt; };
+const log = (t) => { $("log").textContent += t + "\n"; };
+let image = null, meta = null, writing = false, resumed = false;
+const lock = (on) => { writing = on; $("go").disabled = on || !image; };
+window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = T.leave; } });
+const refuseLoader = (id) => sayK(id === STOCK_LOADER ? "loaderStock" : "loaderUnknown", id === STOCK_LOADER ? "" : id);
+
+(async () => {
+  try {
+    meta = await (await fetch("firmware/latest.json", { cache: "no-store" })).json();
+    $("ver").textContent = meta.version;
+    document.querySelectorAll(".v").forEach((e) => { e.textContent = meta.version; });
+    if (!navigator.requestMIDIAccess) { sayK("nomidi"); return; }
+    const r = await fetch(meta.pkg);
+    if (!r.ok) throw new Error(`${meta.pkg}: HTTP ${r.status}`);
+    const pkg = new Uint8Array(await r.arrayBuffer());
+    if (productOf(pkg) !== meta.product) { sayK("badpkg"); return; }
+    image = logicalImage(pkg);
+    say(`DAKHMEH ${meta.version} (${pkg.length.toLocaleString()} bytes) ready`);
+    $("go").disabled = false;
+    let resume = null;
+    try { resume = sessionStorage.getItem("dakhmeh-resume"); sessionStorage.removeItem("dakhmeh-resume"); } catch (_) {}
+    if (resume) { resumed = true; sayK("resuming"); $("go").click(); }   // (back from the "reload" below)
+  } catch (e) { sayK("loadfail", e.message); }
+})();
+
+$("go").addEventListener("click", async () => {
+  if (writing) return;
+  lock(true);
+  let midi;
+  try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
+  catch (e) { sayK("denied"); lock(false); return; }
+  try {
+    const up = new Updater(midi, log);
+    const total = 74 + 1167;
+    const step = (k, a) => {
+      log(`${k} ${a ?? ""}`);
+      if (k === "start") sayK("start");
+      if (k === "verify") { sayK("verify"); $("bar").value = (a / total) * 100; }
+      if (k === "loader") sayK("loader");
+      if (k === "write") { sayK("write"); $("bar").value = ((74 + a) / total) * 100; }
+      if (k === "reboot") sayK("reboot");
+      if (k === "done") { $("bar").value = 100; sayK("done"); }
+    };
+    if (resumed) {                               // reloaded to reach the loader: wait for it, never look for a running FM-1
+      resumed = false;
+      const ok = await up.resume(image, step, meta.product, 15000);
+      if (ok) { try { sessionStorage.removeItem("dakhmeh-reloads"); } catch (_) {} }
+      sayK(ok ? "done" : "noloader");
+      lock(false);
+      return;
+    }
+    const ota = await up.find((id) => /^ota-/i.test(id.model));
+    if (ota) {                                   // already in update mode (an install cut off): resume it
+      ota.link.close();
+      if (ota.id.text !== FELUCCA_LOADER) refuseLoader(ota.id.text);
+      else sayK((await up.resume(image, step, meta.product)) ? "done" : "stopped");
+    } else {
+      await up.install(image, meta.product, step, FELUCCA_LOADER);
+    }
+  } catch (e) {
+    let reloads = 0;
+    try { reloads = +(sessionStorage.getItem("dakhmeh-reloads") || 0); } catch (_) {}
+    if (e && e.code === "reload" && reloads >= 2) {   // two reloads did not reach it: the cable, not the page
+      try { sessionStorage.removeItem("dakhmeh-reloads"); } catch (_) {}
+      sayK("noloader");
+      log(String(e && e.stack || e));
+      lock(false);
+      return;
+    }
+    if (e && e.code === "reload") {              // Chrome on Linux hides the loader's input from this page; a new one sees it
+      sayK("reload");
+      try { sessionStorage.setItem("dakhmeh-resume", "1"); sessionStorage.setItem("dakhmeh-reloads", String(reloads + 1)); } catch (_) {}
+      writing = false;
+      setTimeout(() => location.reload(), 500);
+      return;
+    }
+    if (e && e.code === "wrongloader") refuseLoader(e.detail);
+    else if (e && e.code && T[e.code]) sayK(e.code, e.detail || "");
+    else sayK("error", e && e.message);
+    log(String(e && e.stack || e));
+  }
+  lock(false);
+});
+</script>
+</body>
+</html>
