@@ -39,7 +39,7 @@
 #define FM_ALL (FM_PK * NT)
 #define PK_ENG 7u                               /* a track's sources kept (NENG); bytes 29..31 (an eighth source's
                                                  * room till step 23): TRACK's filter and FX, 0 their defaults */
-#define TRK_PK 52u                              /* a track, packed (OBJ_VERS: older versions' were shorter) */
+#define TRK_PK 111u                              /* a track with SARDAB tuning, packed (OBJ_VERS: older versions' were shorter) */
 #define SEQ_PK 260u                             /* a sequence, packed: 4 + 64 steps x 4 B (the 4th: its chord) */
 #define SEQ_PK5 196u                            /* (version 5 and before: 3 B a step) */
 #define LOCK_PK 288u                            /* a track's step locks: 64 x the four values, 64 x 4 bits which */
@@ -54,10 +54,10 @@
 #define WORK_PK WORK_LEN(TRK_PK, SONG_PK, SEQ_PK, LOCK_PK, FM_ALL)
 #define OBJ_HDR 12u                             /* magic, the save count, type, version, length */
 #define OBJ_MAGIC 0x4B4D5247u                   /* "GRMK" */
-#define OBJ_VER 7u
-#define SLS_VER 6u                              /* the slots' stream (its layout as version 6's) */
-#define NOBJV 6u
-static const uint16_t OBJ_VERS[NOBJV][6] = {{7, 52, 20, 260, 288, FM_ALL}, {6, 52, 20, 260, 288, 0},
+#define OBJ_VER 9u
+#define SLS_VER 8u                              /* SARDAB: 111-byte tracks; older slot streams require conversion */
+#define NOBJV 8u
+static const uint16_t OBJ_VERS[NOBJV][6] = {{9, 111, 20, 260, 288, FM_ALL}, {8, 70, 20, 260, 288, FM_ALL}, {7, 52, 20, 260, 288, FM_ALL}, {6, 52, 20, 260, 288, 0},
                                             {5, 52, 20, 196, 0, 0}, {4, 52, 0, 196, 0, 0}, {3, 48, 0, 196, 0, 0},
                                             {2, 44, 0, 196, 0, 0}};   /* the versions loaded, newest first: a track's,
                                                  * the song's, a sequence's, the locks', the FM patches' size (6: before
@@ -67,8 +67,8 @@ static const uint16_t OBJ_VERS[NOBJV][6] = {{7, 52, 20, 260, 288, FM_ALL}, {6, 5
 #define SLS_P (4096u - OBJ_HDR - 4u)            /* the stream's bytes a sector */
 #define SLS_N 3u                                /* its sectors: 3, 4, 5 */
 enum { OBJ_WORK, OBJ_SLOTS };
-enum { CAT_DRONE, CAT_PAD, CAT_BELL, CAT_ORGAN, CAT_KEYS, CAT_BASS, CAT_TEXTURE, CAT_VOICE, CAT_OTHER, NCAT };
-static const char *const CAT_NAME[NCAT] = {"DRONE", "PAD", "BELL", "ORGAN", "KEYS", "BASS", "TEXTURE", "VOICE", "OTHER"};
+enum { CAT_DRONE, CAT_PAD, CAT_BELL, CAT_ORGAN, CAT_KEYS, CAT_BASS, CAT_TEXTURE, CAT_VOICE, CAT_OTHER, CAT_DESERT, NCAT };
+static const char *const CAT_NAME[NCAT] = {"DRONE", "PAD", "BELL", "ORGAN", "KEYS", "BASS", "TEXTURE", "VOICE", "OTHER", "DESERT"};
 _Static_assert(NENG <= PK_ENG, "a save keeps every source's settings");
 _Static_assert(SND_N * SND_SIZE <= 4096u && OBJ_HDR + WORK_PK + 4u <= 4096u && 4u * SLOT_ALL <= SLS_N * SLS_P &&
                SAVE_NSECT >= 3u + SLS_N, "the save sectors");
@@ -130,6 +130,18 @@ static const uint8_t SND_FACTORY[][SND_FSIZE] = {
     FSND(CAT_KEYS, 9, ENG_PHASE, 3, 0, 40, 4, 80, 90, 70, 80, 0, 0x00, 100, 1, 0, 0),       /* CANDLE */
     /* TEXTURES */
     FSND(CAT_TEXTURE, 1, ENG_VOICE, 96, 12, 0, 127, 100, 90, 120, 105, 1, 0x00, 30, 90, 4, 0), /* WIND THRU STONE */
+    FSND(CAT_DESERT, 1, ENG_PHYS, 1, 35, 65, 0, 0, 100, 127, 45, 0, 0, 40, 0, 0, 0), /* DESERT OUD */
+    FSND(CAT_DESERT, 2, ENG_PHYS, 1, 72, 82, 0, 0, 100, 127, 65, 0, 0, 40, 0, 0, 0), /* BRASS QANUN */
+    FSND(CAT_DESERT, 3, ENG_PHYS, 4, 32, 68, 24, 0, 100, 127, 78, 0, 0, 40, 0, 0, 0), /* SANTUR */
+    FSND(CAT_DESERT, 4, ENG_PHYS, 4, 43, 83, 44, 0, 100, 127, 95, 0, 0, 40, 0, 0, 0), /* DUSK SANTUR */
+    FSND(CAT_DESERT, 5, ENG_WHEEL, 16, 0, 8, 0, 30, 64, 110, 55, 0, 0, 40, 0, 0, 0), /* DUNE NEY */
+    FSND(CAT_DESERT, 6, ENG_VA, 3, 4, 82, 32, 6, 64, 118, 32, 0, 0, 40, 0, 0, 0), /* MIJWIZ */
+    FSND(CAT_DESERT, 7, ENG_VA, 4, 0, 79, 22, 9, 64, 118, 42, 0, 0, 40, 0, 0, 0), /* ARGHUL */
+    FSND(CAT_DESERT, 8, ENG_PHYS, 1, 30, 100, 65, 28, 90, 110, 55, 0, 0, 40, 0, 0, 0), /* RABABA MODEL */
+    FSND(CAT_DESERT, 9, ENG_SAMPLE, 0, 0, 127, 0, 0, 100, 127, 40, 0, 0, 40, 0, 0, 0), /* OUD SAMPLE */
+    FSND(CAT_DESERT, 10, ENG_SAMPLE, 1, 0, 127, 0, 0, 100, 127, 50, 0, 0, 40, 0, 0, 0), /* QANUN SAMPLE */
+    FSND(CAT_DESERT, 11, ENG_SAMPLE, 2, 0, 127, 0, 5, 100, 127, 50, 0, 0, 40, 0, 0, 0), /* NEY AIR SAMPLE */
+    FSND(CAT_DESERT, 12, ENG_SAMPLE, 3, 0, 127, 0, 0, 100, 127, 50, 0, 0, 40, 0, 0, 0), /* TAR SAMPLE */
 };
 static const char *const SND_FNAME[] = {
     "CRYPT PAD", "ASH VEIL", "FROZEN HALL", "LAST LIGHT", "MOSS", "BLACK VELVET",
@@ -140,6 +152,7 @@ static const char *const SND_FNAME[] = {
     "HAUNTED STRINGS", "DUNGEON BRASS", "WAR HORN", "CELLO GRAVE", "SORROW STRINGS",
     "WRAITH", "LANTERN", "SPIDER PLUCK", "LUTE", "CANDLE",
     "WIND THRU STONE",
+    "DESERT OUD", "BRASS QANUN", "SANTUR", "DUSK SANTUR", "DUNE NEY", "MIJWIZ", "ARGHUL", "RABABA MODEL", "OUD SAMPLE", "QANUN SAMPLE", "NEY AIR SAMPLE", "TAR SAMPLE",
 };   /* (16 characters at most: the header beside HOME's tempo) */
 #define SND_NFACT (sizeof SND_FACTORY / sizeof SND_FACTORY[0])
 _Static_assert(SND_NFACT == sizeof SND_FNAME / sizeof SND_FNAME[0], "a name a factory sound");
@@ -352,7 +365,7 @@ static uint32_t cat_len(uint32_t c)
     return n;
 }
 
-/* ---- packing: a track (52 B), a sequence (260 B), a track's step locks (288 B) */
+/* ---- packing: a track (TRK_PK B), a sequence (260 B), a track's step locks (288 B) */
 static uint8_t *pk_track(uint8_t *q, uint32_t t)
 {
     uint32_t e, k;
@@ -373,16 +386,30 @@ static uint8_t *pk_track(uint8_t *q, uint32_t t)
     q[45] = (uint8_t)clamp(trk[t].arp_rate, 0, NARPRATE - 1), q[46] = (uint8_t)clamp(trk[t].arp_oct, 1, 4);
     q[47] = (uint8_t)clamp(trk[t].arp_gate, 10, 100);
     lfo_pk(q + 48, t);                          /* LFO */
+    q[52] = (uint8_t)clamp(trk[t].root, 0, 11), q[53] = (uint8_t)clamp(trk[t].scale, 0, NSCALE - 1);
+    q[54] = (uint8_t)clamp(trk[t].map, 0, NMAP - 1), q[55] = (uint8_t)clamp(trk[t].temper, 0, 3);
+    for (k = 0; k < 12u; k++) q[56 + k] = (uint8_t)(int8_t)clamp(trk[t].trim[k], -63, 63);
+    q[68] = (uint8_t)trk[t].custom, q[69] = (uint8_t)((uint32_t)trk[t].custom >> 8 & 15u);
+    q[70] = (uint8_t)clamp(trk[t].tuning_mode, 0, 1);
+    q[71] = (uint8_t)clamp(trk[t].tuning_system, 0, 1);
+    q[72] = (uint8_t)clamp(trk[t].retune, 0, 2);
+    for (k = 0; k < 12u; k++) {
+        int32_t dc = clamp(trk[t].table[k], -2000, 2000);
+        q[73 + 2*k] = (uint8_t)dc, q[74 + 2*k] = (uint8_t)((uint32_t)dc >> 8);
+        q[97 + k] = (uint8_t)(int8_t)clamp(trk[t].tash_cents[k], -100, 100);
+        if (trk[t].tash_on[k]) q[109 + k/8] |= 1u << (k%8);
+    }
     return q + TRK_PK;
 }
 static void trk_def(uint8_t *q, uint32_t n)     /* a track's bytes from n on (a save before ARP, before the LFO) as at
                                                  * power-on: ARP OFF (UP, 1/16, 1 octave, 50 %), LFO DEPTH 0 */
 {
     static const track_t T0 = TRK_DEF;
-    uint8_t d[TRK_PK];
+    uint8_t d[TRK_PK] = {0};
     uint32_t k;
     d[44] = (uint8_t)T0.arp_mode, d[45] = (uint8_t)T0.arp_rate, d[46] = (uint8_t)T0.arp_oct, d[47] = (uint8_t)T0.arp_gate;
     d[48] = (uint8_t)T0.lfo_rate, d[49] = 0, d[50] = (uint8_t)T0.lfo_dest, d[51] = (uint8_t)T0.lfo_shape;
+    for (k = 97; k < 109; k++) d[k] = (uint8_t)(int8_t)-50;
     for (k = n < 44u ? 44u : n; k < TRK_PK; k++) q[k] = d[k];
 }
 static void restart_track(uint32_t t);          /* (grimm.c: the audio ISR's NQ_RESTART, */
@@ -412,6 +439,16 @@ static const uint8_t *uk_track(const uint8_t *q0, uint32_t t, int isr, uint32_t 
     trk[t].arp_oct = clamp(q[46], 1, 4), trk[t].arp_gate = clamp(q[47], 10, 100);
     trk[t].arp = (int32_t)(q[44] >> 7 & 1u);    /* (on or off: arp.c's arp_watch starts it empty) */
     lfo_uk(q + 48, t);
+    trk[t].root = clamp(q[52], 0, 11), trk[t].scale = clamp(q[53], 0, NSCALE - 1);
+    trk[t].map = clamp(q[54], 0, NMAP - 1), trk[t].temper = clamp(q[55], 0, 3);
+    for (k = 0; k < 12u; k++) trk[t].trim[k] = clamp((int8_t)q[56 + k], -63, 63);
+    trk[t].custom = (q[68] | q[69] << 8) & 4095;
+    trk[t].tuning_mode = clamp(q[70], 0, 1), trk[t].tuning_system = clamp(q[71], 0, 1), trk[t].retune = clamp(q[72], 0, 2);
+    for (k = 0; k < 12u; k++) {
+        trk[t].table[k] = clamp((int16_t)(q[73+2*k] | q[74+2*k] << 8), -2000, 2000);
+        trk[t].tash_cents[k] = clamp((int8_t)q[97+k], -100, 100);
+        trk[t].tash_on[k] = q[109+k/8] >> (k%8) & 1u;
+    }
     if (trk[t].eng != (int32_t)q[0] && q[0] < NENG) {
         trk[t].eng = q[0];
         if (isr) restart_track(t);
@@ -478,8 +515,8 @@ static void pk_work(uint8_t *q)
     for (t = 0; t < NT; t++) q = pk_track(q, t);
     for (k = 0; k < 16u; k++) *q++ = (uint8_t)clamp(*PK_FX[k], 0, 127);
     q[0] = (uint8_t)clamp(seq_bpm, 20, 300), q[1] = (uint8_t)(clamp(seq_bpm, 20, 300) >> 8);
-    q[2] = (uint8_t)(clamp(slot_cur, 0, 3) | clamp(sc_root, 0, 11) << 4);   /* (and SCALE's ROOT, */
-    q[3] = (uint8_t)((sel & 3u) | (uint32_t)clamp(sc_scale, 0, NSCALE - 1) << 4);   /* the track selected, SCALE) */
+    q[2] = (uint8_t)clamp(slot_cur, 0, 3);   /* (and SCALE's ROOT, */
+    q[3] = (uint8_t)(sel & 3u);   /* the track selected, SCALE) */
     q += 4;
     for (t = 0; t < NT; t++) q = pk_seq(q, t);
     for (t = 0; t < NT; t++) q = pk_lock(q, t);
@@ -502,7 +539,14 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
         seq_bpm = clamp(q[16] | q[17] << 8, 20, 300);
         slot_cur = q[18] & 3u;
         sel = q[19] & 3u;
-        sc_root = clamp(q[18] >> 4, 0, 11), sc_scale = clamp(q[19] >> 4, 0, NSCALE - 1);
+        if (tn < 70u) { /* Grimm's global scale IDs mapped to the SARDAB catalog. */
+            static const uint8_t old_scale[14] = {0, 2, 1, 3, 8, 9, 4, 10, 7, 22, 32, 23, 6, 5};
+            for (t = 0; t < NT; t++) {
+                trk[t].root = clamp(q[18] >> 4, 0, 11);
+                trk[t].scale = old_scale[clamp(q[19] >> 4, 0, 13)];
+                trk[t].map = MAP_SNAP;
+            }
+        }
     }
     q += 20;
     for (t = 0; t < NT; t++) q = uk_seq(q, t, sq);

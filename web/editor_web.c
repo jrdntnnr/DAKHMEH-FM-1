@@ -69,7 +69,7 @@ EXPORT char *web_meta(void)
     for (k = 0; k < 32u; k++) wm_bytes(FM6_ALG[k], 6), wm_s(k + 1u < 32u ? "," : "]");
     wm_s(",\"factory\":[");
     for (k = 0; k < SND_NFACT; k++) {
-        wm_s("{\"name\":"), wm_q(SND_FNAME[k]), wm_s(",\"rec\":"), wm_bytes(ed_bytes(EO_FACT + k), SND_SIZE);
+        wm_s("{\"name\":"), wm_q(SND_FNAME[k]), wm_s(",\"rec\":"), wm_bytes(ed_bytes(ed_factory_object(k)), SND_SIZE);
         wm_s(k + 1u < SND_NFACT ? "}," : "}]");
     }
     wm_s("}");

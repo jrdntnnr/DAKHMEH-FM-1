@@ -64,8 +64,8 @@ def info(link):
     d = dict(proto=r[0], fmt=r[1], firmware=bytes(r[2:j]).decode("ascii", "replace"), sounds=r[i],
              sound_size=r[i + 1], factory=r[i + 2], slot_size=rd35(r[i + 3:i + 8]), set_size=rd35(r[i + 8:i + 13]),
              sample_slots=r[i + 13], samples_used=r[i + 14])
-    if d["proto"] not in (1, 2):
-        sys.exit(f"the FM-1 speaks editor protocol {d['proto']}; this tool knows 1 and 2")
+    if d["proto"] not in (1, 2, 3):
+        sys.exit(f"the FM-1 speaks editor protocol {d['proto']}; this tool knows 1, 2 and 3")
     return d
 
 

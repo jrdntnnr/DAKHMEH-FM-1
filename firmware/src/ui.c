@@ -14,6 +14,7 @@
  * when what they show changes; the picture at most every UI_PIC_MS while a knob turns. Main loop only. */
 
 #include "grimm_pixfont.h"
+#include "dakhmeh_wordmark.h"
 
 #define UI_K RGB(0x0b, 0x0b, 0x0a)              /* the palette: black (the background), */
 #define UI_D RGB(0x26, 0x25, 0x1f)              /* dark */
@@ -108,7 +109,7 @@ static void ui_head_text(void)
         }
     }
     if (P->btn == BTN_SEL)                      /* (Scale: the chord mode, the track on the right) */
-        put_s(ui_hl, page == PG_CHORD ? (trk[sel].chord ? "CHORD ON" : "CHORD OFF") : trk[sel].chord ? "SCALE CHORD" : "SCALE");
+        put_s(ui_hl, page >= PG_TUNE1 && page <= PG_TASH3 ? PAGES[page].name : page == PG_CHORD ? (trk[sel].chord ? "CHORD ON" : "CHORD OFF") : trk[sel].chord ? "SCALE CHORD" : "SCALE");
     for (p = 0; p < NPAGE; p++)                 /* its number in the button's round: "1/2" */
         if (PAGES[p].btn == P->btn && pg_on(p)) {
             n++;
@@ -296,8 +297,8 @@ static void ui_slab_make(uint32_t k, slab_t *S)
     if (page == PG_GRID && k == 0u && v) S->fill = (uint8_t)(1 + (v - 1) * 7 / 126);   /* (a note: at least 1) */
     switch (page) {
     case PG_SOUND:
-        if (eng == ENG_PHYS && k == 1u) put_s(S->lab, md == PM_MEMB ? "HARM" : md == PM_SYMP ? "CHORD" : "STRUCT");
-        if (eng == ENG_PHYS && k == 3u) put_s(S->lab, md == PM_MEMB ? "BEND" : md == PM_SYMP ? "BUZZ" : "BOW");
+        if (eng == ENG_PHYS && k == 1u) put_s(S->lab, md == PM_MEMB ? "HARM" : md == PM_SYMP ? "CHORD" : md == PM_SANTUR ? "SPREAD" : "STRUCT");
+        if (eng == ENG_PHYS && k == 3u) put_s(S->lab, md == PM_MEMB ? "BEND" : md == PM_SYMP ? "BUZZ" : md == PM_SANTUR ? "HAMMER" : "BOW");
         if (eng == ENG_SAMPLE && k == 0u) { put_u(S->val, (uint32_t)v + 1u); return; }   /* (the name: the caption) */
         if (eng == ENG_VA && k == 0u) { put_s(S->val, v == WAVE_SUPER ? "SUPER" : v == WAVE_SQR ? "SQR" : "SAW"); return; }
         if (eng == ENG_PHYS && k == 0u) { put_s(S->val, md == PM_MEMB ? "MEMB" : md == PM_SYMP ? "SYMP" : N_PHYS_MODEL[md]); return; }
@@ -325,7 +326,9 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         if (k == 2u) { put_s(S->val, v ? ENGINES[clamp(v - 1, 0, NENG - 1)]->name : "ALL"); return; }
         put_s(S->val, SV_ACT[clamp(v, 0, 2)]);
         return;
-    case PG_SCALE: put_s(S->val, k ? SC_SHORT[clamp(v, 0, NSCALE - 1)] : SC_NOTE[clamp(v, 0, 11)]); return;
+    case PG_TUNING: put_s(S->val, k == 0 ? (v ? "TASH" : "MAQAM") : k == 1 ? (v ? "CUSTOM" : "PRESET") : v == 2 ? "HOLD" : v == 1 ? "GLIDE" : "LIVE"); return;
+    case PG_TASH1: case PG_TASH2: case PG_TASH3: put_s(S->val, v ? "ON" : "OFF"); return;
+    case PG_SCALE: put_s(S->val, k == 0u ? SC_NOTE[clamp(v, 0, 11)] : k == 1u ? SC_SHORT[clamp(v, 0, NSCALE - 1)] : k == 2u ? MAP_NAME[clamp(v, 0, NMAP - 1)] : TEMP_NAME[clamp(v, 0, 3)]); return;
     case PG_SONG:
         if (k == 0u || k == 2u) {               /* SECTION, REPEATS: "03" */
             v = clamp(v + (k ? 0 : 1), 1, 16);
@@ -348,6 +351,9 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         else if (k == 2u) put_u(S->val, (uint32_t)clamp(v, 1, 4));
         else ui_3(S->val, (uint32_t)clamp(v, 10, 100));
         return;
+    case PG_TUNE1: case PG_TUNE2: case PG_TUNE3:
+        { char *q = S->val; if (v < 0) *q++ = '-'; else if (v > 0) *q++ = '+';
+          put_u(q, (uint32_t)(v < 0 ? -v : v)); S->fill = (uint8_t)((v + 63) * 8 / 126); } return;
     case PG_CHORD: put_s(S->val, k ? VC_NAME[clamp(v, 0, NVOICING - 1)] : CH_SHORT[clamp(v, 0, NCHORD - 1)]); return;
     case PG_PROJECTS:
         if (k == 0u) { S->val[0] = (char)('A' + (v & 3)), S->val[1] = 0; return; }
@@ -846,6 +852,7 @@ static void pic_sample(void)                    /* the slot's sample, the loop (
     sp_loop(p, &L);
     x = (int32_t)(L.len * 100u / 22050u);
     put_s(put_s(put_x10(r, (uint32_t)(x + 5) / 10u), " S"), L.rev ? " REV" : "");
+    if(smp[slot].zones) put_s(put_u(r,smp[slot].nz)," ZONES");
     ui_caption(s, r);
     smp_peaks(slot);
     x0 = (int32_t)((uint64_t)L.l0 * 54u / smp[slot].n);
@@ -1165,7 +1172,7 @@ static void pic_grid(void)                      /* Seq: the 64 steps of the trac
     put_u(put_s(st, "STEPS "), (uint32_t)n);
     ui_text(148, 93, st, 1, UI_L);
     if (P->st[cur].note && P->st[cur].chord) {   /* the selected step's chord: a chord step's own, "CHORD Cm7" */
-        chord_name_tv(P->st[cur].chord & 15, (uint32_t)P->st[cur].note, st);
+        chord_name_tv(sel, P->st[cur].chord & 15, (uint32_t)P->st[cur].note, st);
         if (ui_len(st) <= 5) ui_text(196, 105, st, 1, ui_acc), ui_text(148, 105, "CHORD", 1, UI_M);
         else ui_text(148, 105, st, 1, ui_acc);
     } else if (!trk[sel].chord) ui_text(148, 105, "CHORD OFF", 1, UI_M);   /* (a note step: the track's chord mode) */
@@ -1231,31 +1238,46 @@ static void pic_sel(void)                       /* Scale: the keys (the scale's 
     char l[32], rg[12], *e;
     int32_t x;
     r = ch_last >= (int32_t)base && ch_last < (int32_t)base + 27 ? (uint32_t)ch_last :
-        base + (uint32_t)(clamp(sc_root, 0, 11) + 12 - (int32_t)(base % 12u)) % 12u;
-    n = chord_notes(sel, r, ns);
+        base + (uint32_t)(clamp(trk[sel].root, 0, 11) + 12 - (int32_t)(base % 12u)) % 12u;
+    if (trk[sel].chord) n = chord_notes(sel, r, ns);
+    else ns[0] = (uint8_t)r, n = 1;
     for (i = 0; i < n; i++)
         if (ns[i] >= base && ns[i] < base + 27u) lit |= 1u << (ns[i] - base);
-    e = put_s(put_s(l, SC_NOTE[clamp(sc_root, 0, 11)]), " ");
-    put_s(e, SC_NAME[clamp(sc_scale, 0, NSCALE - 1)]);
+    e = put_s(put_s(l, SC_NOTE[clamp(trk[sel].root, 0, 11)]), " ");
+    put_s(e, SC_NAME[clamp(trk[sel].scale, 0, NSCALE - 1)]);
     ui_note(put_s(ui_note(rg, base), "-"), base + 26u);   /* (the keys' range: "F3-G5") */
     ui_caption(l, rg);
     for (k = 0; k < 27u; k++)                   /* the white keys, then the black ones over them */
         if (WI[k % 12u] >= 0) {
             x = 12 + ((int32_t)(k / 12u) * 7 + WI[k % 12u]) * 27 / 2;
-            ui_rect(x, 42, 12, 72, lit >> k & 1u ? ui_acc : sc_in((int32_t)(base + k)) ? UI_L : UI_M);
+            ui_rect(x, 42, 12, 72, lit >> k & 1u ? ui_acc : sc_in(sel, (int32_t)(base + k)) ? UI_L : UI_M);
         }
     for (k = 0; k < 27u; k++)
         if (WI[k % 12u] < 0) {
             x = 12 + (((int32_t)(k / 12u) * 7 + WI[(k - 1u) % 12u] + 1) * 27 - 10) / 2;
             ui_rect(x, 42, 9, 43, UI_K);
-            ui_rect(x + 1, 42, 7, 42, lit >> k & 1u ? ui_acc : sc_in((int32_t)(base + k)) ? UI_M : UI_D);
+            ui_rect(x + 1, 42, 7, 42, lit >> k & 1u ? ui_acc : sc_in(sel, (int32_t)(base + k)) ? UI_M : UI_D);
         }
-    chord_name(sel, r, l);
-    x = ui_text(12, 124, l, 2, trk[sel].chord ? ui_acc : UI_M) + 8;
-    if (!trk[sel].chord) put_s(l, "OFF: HOLD SEL");
+    /* Distinct markers on enabled absolute pitch classes; repeated in every octave. */
+    if (trk[sel].tuning_mode) for (k = 0; k < 27u; k++) if (trk[sel].tash_on[(base+k)%12u]) {
+        x = WI[k%12u] >= 0 ? 12 + ((int32_t)(k/12u)*7 + WI[k%12u])*27/2 + 3 :
+            12 + (((int32_t)(k/12u)*7 + WI[(k-1u)%12u]+1)*27-10)/2 + 2;
+        ui_rect(x, WI[k%12u] >= 0 ? 104 : 73, 5, 4, ui_acc);
+    }
+    if (trk[sel].chord) chord_name(sel, r, l);
     else {
-        for (i = 0, k = 1; i < n; i++) k &= (uint32_t)sc_in(ns[i]);   /* (all of them in the scale: IN KEY) */
-        put_s(put_s(put_u(l, n), n == 1u ? " NOTE" : " NOTES"), k && sc_scale > 0 ? " IN KEY" : "");
+        int32_t dc = tuning_dc(sel, r), cents = (dc + (dc < 0 ? -5 : 5)) / 10;
+        e = ui_note(l, r);
+        if (cents) {
+            *e++ = ' '; *e++ = cents < 0 ? '-' : '+';
+            put_s(put_u(e, (uint32_t)(cents < 0 ? -cents : cents)), "CT");
+        }
+    }
+    x = ui_text(12, 124, l, 2, trk[sel].chord ? ui_acc : UI_M) + 8;
+    if (!trk[sel].chord) put_s(l, "");
+    else {
+        for (i = 0, k = 1; i < n; i++) k &= (uint32_t)sc_in(sel, ns[i]);   /* (all of them in the scale: IN KEY) */
+        put_s(put_s(put_u(l, n), n == 1u ? " NOTE" : " NOTES"), k && trk[sel].scale > 0 ? " IN KEY" : "");
     }
     if (x + 8 * ui_len(l) > 228) {              /* (a long name: the short of it) */
         if (trk[sel].chord) put_s(put_u(l, n), " NOTES");
@@ -1263,7 +1285,7 @@ static void pic_sel(void)                       /* Scale: the keys (the scale's 
     }
     ui_text(x, 128, l, 1, UI_M);
     ui_rect(12, 147, 6, 6, UI_L), ui_text(22, 146, "IN SCALE", 1, UI_M);
-    ui_rect(98, 147, 6, 6, ui_acc), ui_text(108, 146, "CHORD", 1, UI_M);
+    ui_rect(98, 147, 6, 6, ui_acc), ui_text(108, 146, trk[sel].chord ? "CHORD" : "NOTE", 1, UI_M);
 }
 
 static void pic_arp(void)                       /* Arp: what it holds, its steps (13 at most) as bars, their height
@@ -1533,7 +1555,7 @@ static void ui_pic_draw(void)
     case PG_SPACE: pic_space(); return;
     case PG_GRID: pic_grid(); return;
     case PG_PATTERN: pic_pattern(); return;
-    case PG_SCALE: case PG_CHORD: pic_sel(); return;
+    case PG_SCALE: case PG_CHORD: case PG_TUNE1: case PG_TUNE2: case PG_TUNE3: case PG_TUNING: case PG_TASH1: case PG_TASH2: case PG_TASH3: pic_sel(); return;
     case PG_ARP: pic_arp(); return;
     case PG_LFO: pic_lfo(); return;
     case PG_SONG: pic_song(); return;
@@ -1559,7 +1581,9 @@ static uint32_t ui_pic_key(void)
     for (t = 0; t < NT; t++)
         UI_H(trk[t].level), UI_H(trk[t].dly), UI_H(trk[t].rev), UI_H(trk[t].grn), UI_H(trk[t].pan), UI_H(trk[t].eng);
     UI_H(trk[sel].fm_alg), UI_H(trk[sel].fm_fb), UI_H(fm_op), UI_H(trk[sel].p[ENG_FM][0]);
-    UI_H(trk[sel].latch), UI_H(trk[sel].chord), UI_H(trk[sel].ch_type), UI_H(trk[sel].ch_voice), UI_H(sc_root), UI_H(sc_scale);
+    UI_H(trk[sel].latch), UI_H(trk[sel].chord), UI_H(trk[sel].ch_type), UI_H(trk[sel].ch_voice), UI_H(trk[sel].root), UI_H(trk[sel].scale), UI_H(trk[sel].map), UI_H(trk[sel].temper);
+    UI_H(trk[sel].tuning_mode), UI_H(trk[sel].tuning_system), UI_H(trk[sel].retune);
+    for (k = 0; k < 12u; k++) { UI_H(trk[sel].trim[k]); UI_H(trk[sel].table[k]); UI_H(trk[sel].tash_on[k]); UI_H(trk[sel].tash_cents[k]); }
     if (PAGES[page].btn == BTN_SEL) UI_H(ch_last), UI_H(ui_oct);
     UI_H(trk_quiet);
     if (page == PG_PERFORM) UI_H(pf_held), UI_H(ge_freeze);
@@ -1599,43 +1623,28 @@ static uint32_t ui_pic_key(void)
 }
 
 /* ---- the screen: the boot, then the page, only what changed */
-/* Boot, UI_BOOT_MS at power-on (the project loaded before): the eye opens over the first second, the drips run down from
- * the bar over the three; only those two drawn again, a frame every UI_ANIM_MS */
-static const int8_t DRIP[30] = {0, 3, 0, 0, 6, 0, 2, 0, 0, 0, 8, 0, 0, 1, 0, 0, 4, 0, 0, 0, 7, 0, 0, 2, 0, 0, 5, 0, 0, 0};
-static uint32_t ui_boot_t, bt_k, bt_d;          /* from when; the lids, the drips' time (0 .. UI_BOOT_MS) shown */
-#define BOOT_LINE "FM-1 / DEATHDREAM / V" APP_VER
-static const char *bt_note;                     /* the boot screen's last line, if not BOOT_LINE ("INSTALLING SAMPLES") */
-static int32_t bt_len(uint32_t x) { return DRIP[x] * (int32_t)bt_d / (int32_t)UI_BOOT_MS; }   /* a drip's cells now */
-static void ui_boot_draw(void)                  /* Boot: the eye, GR!MM, the drips */
+/* Static bilingual wordmark; the device uses the same pixels as the emulator. */
+static uint32_t ui_boot_t;
+#define BOOT_LINE "FM-1 / V" APP_VER
+static const char *bt_note;
+static void ui_boot_draw(void)
 {
     int32_t x, y;
-    ui_eye(80, 48, (int32_t)bt_k, 0, 0);
-    ui_text(120 - 12 * 5, 100, APP_NAME, 3, UI_L);
-    for (y = 0; y < 10; y++)
-        for (x = 0; x < 30; x++)
-            if (!y || y <= bt_len((uint32_t)x)) ui_rect(60 + x * 4, 128 + y * 4, 4, 4, y ? ui_acc : UI_M);
-    ui_text(120 - 4 * ui_len(bt_note ? bt_note : BOOT_LINE), 210, bt_note ? bt_note : BOOT_LINE, 1, bt_note ? ui_acc : UI_M);
+    for (y = 0; y < DAKHMEH_WORD_H; y++)
+        for (x = 0; x < DAKHMEH_WORD_W; x++)
+            if (DAKHMEH_WORD[y * DAKHMEH_WORD_STRIDE + x / 8] & (0x80u >> (x % 8)))
+                ui_rect((240 - DAKHMEH_WORD_W) / 2 + x, 62 + y, 1, 1, UI_W);
+    ui_text(120 - 8 * ui_len(APP_NAME), 142, APP_NAME, 2, UI_L);
+    ui_text(32, 174, "DUNGEONS OF THE DESERT", 1, UI_M);
+    ui_text(120 - 4 * ui_len(bt_note ? bt_note : BOOT_LINE), 214,
+            bt_note ? bt_note : BOOT_LINE, 1, bt_note ? ui_acc : UI_M);
 }
 static void ui_boot(void)
 {
-    ui_boot_t = fm1_ms, bt_k = bt_d = 0;
+    ui_boot_t = fm1_ms;
     ui_region(0, 0, 240, 240, UI_K, ui_boot_draw);
 }
-static void ui_boot_frame(void)
-{
-    static uint32_t t;
-    uint32_t e = fm1_ms - ui_boot_t, k = e >= 1000u ? 4u : e * 4u / 1000u, x, was = 0, now = 0;
-    if (fm1_ms - t < UI_ANIM_MS) return;
-    t = fm1_ms;
-    if (k != bt_k) {
-        bt_k = k;
-        ui_region(80, 48, 80, 40, UI_K, ui_boot_draw);
-    }
-    for (x = 0; x < 30u; x++) was += (uint32_t)bt_len(x);
-    bt_d = e;
-    for (x = 0; x < 30u; x++) now += (uint32_t)bt_len(x);
-    if (now != was) ui_region(60, 132, 120, 36, UI_K, ui_boot_draw);   /* (a drip a cell longer) */
-}
+static void ui_boot_frame(void) { } /* Static splash: no redraw while the audio starts. */
 
 static void ui_update(int32_t oct)
 {

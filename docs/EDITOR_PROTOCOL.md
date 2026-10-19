@@ -1,3 +1,38 @@
+# DAKHMEH protocol 3 extension
+
+Current DAKHMEH builds advertise protocol **3**, object format **3**, 52
+factory sounds, 111-byte tracks and 2,768-byte slot objects. The upstream
+reference below describes the original formats; use INFO for current sizes.
+Factory indices 0–47 use object IDs 80–127; indices 48–51 use IDs 5–8. These
+objects are read-only. User sound IDs and track sound records are unchanged.
+
+## 24 TUNING
+
+Request: `op, track [, pack7(data)]`. `op=0` reads, `op=1` updates live;
+track is 0–3. Reply: `op, track, rc [, pack7(data)]`. On success the reply
+includes the resulting 59-byte tuning state. Live updates do not select a
+track or replace its sound. Project/slot saving persists the state.
+
+Offsets below are within the unpacked 59-byte data (track bytes 52–110):
+
+| Offset | Contents |
+| --- | --- |
+| 0–3 | root 0–11, scale 0–49, layout 0–4, temperament 0–3 |
+| 4–15 | twelve signed int8 root-relative additional cent trims (±63) |
+| 16–17 | little-endian uint16 custom scale mask (12 bits) |
+| 18 | mode: 0 maqam, 1 tashriq |
+| 19 | tuning table: 0 factory, 1 custom |
+| 20 | retune: 0 live, 1 glide, 2 hold |
+| 21–44 | twelve little-endian signed int16 root-relative offsets in 0.1 cents (±2000) |
+| 45–56 | twelve signed int8 absolute C–B tashriq amounts (±100 cents) |
+| 57–58 | little-endian uint16 tashriq enabled mask (12 bits) |
+
+Mode/layout/table values are checked; numeric tuning fields are clamped by
+the firmware's track decoder. Browser JSON additionally retains source and
+maqam identity metadata; that text is not part of this device packet.
+
+---
+
 # GR!MM editor protocol
 
 How an editor (a web page, `tools/fm1_editor_test.py`) talks to GR!MM on the FM-1 over USB-MIDI SysEx: read and

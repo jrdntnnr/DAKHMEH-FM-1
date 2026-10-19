@@ -1,0 +1,36 @@
+{
+  "checked": "2026-10-12",
+  "sources": [
+    {
+      "designer": "Quilcom / Spogg",
+      "instrument": "santur",
+      "version": "1.00",
+      "download": "https://flowstoners.com/wp-content/uploads/2025/08/Quilcom-SIM-SANTUR-v1.00.zip",
+      "archive_sha256": "51eb89ac707792e7b9bc654ddefee2923e6930e3397afbeaf8cc92dbcb8c03a6",
+      "inspected_files_sha256": {
+        "Quilcom SIM-SANTUR v1.00/Plugin info.docx": "239f14eb30124608e9594401499b626f72185adf3403b0f1a2dcc6b36dcaebac",
+        "Quilcom SIM-SANTUR v1.00/Presets/SANTUR 1.txt": "dd1c98a052bdd394bfb4253771565483176b1b762f456b499448c875184d65fa",
+        "Quilcom SIM-SANTUR v1.00/Quilcom Santur v1.00 .fsm": "b672b22f74ec0e4ccfdc5f3d8d659bcbf994554e90f9291c8e419706e2537b8d",
+        "Quilcom SIM-SANTUR v1.00/User Guide .docx": "496dfea747bdb88814b0ea5dd10a165c0f86ded282afd64b323f56820a7f5501"
+      },
+      "reuse_statement": "Plugin info permits using parts in your own projects; no standard open-source licence supplied.",
+      "integration": "Published design reference only; independently implemented with existing PHYS/TRIO DSP. No upstream code, waveforms or preset files bundled."
+    },
+    {
+      "designer": "Quilcom / Spogg",
+      "instrument": "mijwiz",
+      "version": "1.00",
+      "download": "https://flowstoners.com/wp-content/uploads/2022/05/Quilcom-SIM-MIJWIZ-v1.00.zip",
+      "archive_sha256": "04a2c690912e27a16f3da923bac9c6e876744701854033e2b2ff2f1fdd8dbb8e",
+      "inspected_files_sha256": {
+        "Quilcom SIM-MIJWIZ v1.00/Plugin info .txt": "7d10e9c652be51ffe20e0c067069524d15eb2bddad08e5f70824df337518baa1",
+        "Quilcom SIM-MIJWIZ v1.00/Presets/ARGHUL 1.txt": "08799ed2ca21c541623aac76bd9765791762534549eb97c4d97cda8408f0c456",
+        "Quilcom SIM-MIJWIZ v1.00/Presets/MIJWIZ 1.txt": "49fe111b081cf1b030ebe27ca1d27087493e807600c7bb976edd7787ff8647ce",
+        "Quilcom SIM-MIJWIZ v1.00/Quilcom SIM-MIJWIZ v1.00 .fsm": "2a7e2cea08161a4c7d467122e9d9e7a92e8740f9fdea279c758241cd5a1eba44",
+        "Quilcom SIM-MIJWIZ v1.00/User Guide .docx": "fa9f41b775afbfd85f57bdfb7f8ea35ffe036d6acfc52a78df357ad97a506c3e"
+      },
+      "reuse_statement": "Plugin info permits using parts in your own projects; no standard open-source licence supplied.",
+      "integration": "Published design reference only; independently implemented with existing PHYS/TRIO DSP. No upstream code, waveforms or preset files bundled."
+    }
+  ]
+}

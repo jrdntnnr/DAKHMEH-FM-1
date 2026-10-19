@@ -1,0 +1,214 @@
+[
+  {
+    "name": "OUD",
+    "slot": 1,
+    "files": [
+      {
+        "file": "oud-G2.wav",
+        "root": 43,
+        "source": "oud-g2",
+        "start": 0.03342403628117914,
+        "frames": 30857,
+        "calibration_cents": 0.724,
+        "median_error_cents": -0.038,
+        "natural_pitch_span_cents": 14.18,
+        "sha256": "e4b28d09a40f526a0809ad6ec9a0d4ff613a2422fb6a1965be30240c6c571298"
+      },
+      {
+        "file": "oud-A2.wav",
+        "root": 45,
+        "source": "oud-a2",
+        "start": 0.03768707482993197,
+        "frames": 44178,
+        "calibration_cents": -3.093,
+        "median_error_cents": -0.002,
+        "natural_pitch_span_cents": 4.13,
+        "sha256": "30649ad238f3d18315a023f5a2ceed017f714bb746cd4e9c41a6b220cf4a1e09"
+      },
+      {
+        "file": "oud-C3.wav",
+        "root": 48,
+        "source": "oud-c3",
+        "start": 0.02122448979591837,
+        "frames": 33164,
+        "calibration_cents": -4.674,
+        "median_error_cents": 0.036,
+        "natural_pitch_span_cents": 3.74,
+        "sha256": "7fc3db7387f3b804c552e1de4dd298b5e776e07e91b1f18d51d29cd1bdc58b2f"
+      }
+    ],
+    "bytes": 54100,
+    "header": "oud.hdr",
+    "data": "oud.bin"
+  },
+  {
+    "name": "QANUN",
+    "slot": 2,
+    "files": [
+      {
+        "file": "qanun-F3.wav",
+        "root": 53,
+        "source": "qanun",
+        "start": 119.17451247165533,
+        "frames": 23136,
+        "calibration_cents": 1.146,
+        "median_error_cents": -0.109,
+        "natural_pitch_span_cents": 15.69,
+        "sha256": "5dd8bb1775c4ca8329ed7cb41f9caa4e09fe3f4be6d563c0e25c88fb7fa21908"
+      },
+      {
+        "file": "qanun-C4.wav",
+        "root": 60,
+        "source": "qanun",
+        "start": 85.99383219954649,
+        "frames": 23017,
+        "calibration_cents": 10.114,
+        "median_error_cents": -0.086,
+        "natural_pitch_span_cents": 9.17,
+        "sha256": "328ecb7162f01d9543ad4546095c54aa45d07518f60d1b888c07545b3a64ec57"
+      },
+      {
+        "file": "qanun-F4.wav",
+        "root": 65,
+        "source": "qanun",
+        "start": 63.70258503401361,
+        "frames": 23149,
+        "calibration_cents": 0.153,
+        "median_error_cents": -0.036,
+        "natural_pitch_span_cents": 3.3,
+        "sha256": "84b37081b6598d88ebd601fd9c71da403e0de6ecfc6df84657430a6651a41ef2"
+      },
+      {
+        "file": "qanun-A4.wav",
+        "root": 69,
+        "source": "qanun",
+        "start": 49.96367346938776,
+        "frames": 23262,
+        "calibration_cents": -8.267,
+        "median_error_cents": 0.977,
+        "natural_pitch_span_cents": 5.66,
+        "sha256": "e7a389f1d098dd013ebb87654e72fbcc3334aefd98b7e2211bd083cfe3538707"
+      },
+      {
+        "file": "qanun-D5.wav",
+        "root": 74,
+        "source": "qanun",
+        "start": 36.83179138321996,
+        "frames": 23099,
+        "calibration_cents": 3.912,
+        "median_error_cents": -0.447,
+        "natural_pitch_span_cents": 3.84,
+        "sha256": "fd38d53fba9f5fd82ba5a171eeca59133757945dcc942ea84cf7b869c3b6ba20"
+      },
+      {
+        "file": "qanun-F5.wav",
+        "root": 77,
+        "source": "qanun",
+        "start": 29.470113378684808,
+        "frames": 23146,
+        "calibration_cents": 0.389,
+        "median_error_cents": -0.026,
+        "natural_pitch_span_cents": 0.94,
+        "sha256": "b5dfac37e7fec85ed409c9da49149df89405cdadf9d66904196bd0594e1662e4"
+      }
+    ],
+    "bytes": 69406,
+    "header": "qanun.hdr",
+    "data": "qanun.bin"
+  },
+  {
+    "name": "NEY AIR",
+    "slot": 3,
+    "files": [
+      {
+        "file": "ney-air-B4.wav",
+        "root": 71,
+        "source": "ney",
+        "start": 12.72,
+        "frames": 14842,
+        "calibration_cents": 17.539,
+        "median_error_cents": -0.308,
+        "natural_pitch_span_cents": 107.37,
+        "sha256": "c0b4d3f87088909da73b01db1a958c6ac382963d555d6023def52e5131d19516"
+      },
+      {
+        "file": "ney-air-C5.wav",
+        "root": 72,
+        "source": "ney",
+        "start": 8.64997732426304,
+        "frames": 15456,
+        "calibration_cents": -2.389,
+        "median_error_cents": -2.495,
+        "natural_pitch_span_cents": 156.22,
+        "sha256": "95936e02bfb6392157e691cf806f82966583829b65d9b379f0804f16a7a16ee7"
+      },
+      {
+        "file": "ney-air-E5.wav",
+        "root": 76,
+        "source": "ney",
+        "start": 3.9500226757369616,
+        "frames": 14198,
+        "calibration_cents": 16.239,
+        "median_error_cents": 0.243,
+        "natural_pitch_span_cents": 36.45,
+        "sha256": "927b6cc377dadb3d51ac0e7e67ae21a4f85c5989801a6c7d09bfdbf168f73a97"
+      }
+    ],
+    "bytes": 22248,
+    "header": "ney-air.hdr",
+    "data": "ney-air.bin"
+  },
+  {
+    "name": "TAR",
+    "slot": null,
+    "files": [
+      {
+        "file": "tar-C3.wav",
+        "root": 48,
+        "source": "tar-C3",
+        "start": 0.06412698412698413,
+        "frames": 37533,
+        "calibration_cents": -2.223,
+        "median_error_cents": -0.071,
+        "natural_pitch_span_cents": 8.17,
+        "sha256": "b9adeef2b94d7a0f296fa019f06e671e08209857cac29e2453520bd19ac42847"
+      },
+      {
+        "file": "tar-C4.wav",
+        "root": 60,
+        "source": "tar-C4",
+        "start": 0.05401360544217687,
+        "frames": 37518,
+        "calibration_cents": -1.539,
+        "median_error_cents": -0.114,
+        "natural_pitch_span_cents": 5.51,
+        "sha256": "c0c9cbdf242ca1440e72e1585f1682d8b80a0776eb935f736f0cb85652608d58"
+      },
+      {
+        "file": "tar-Ab4.wav",
+        "root": 68,
+        "source": "tar-Ab4",
+        "start": 0.13165532879818595,
+        "frames": 37207,
+        "calibration_cents": 12.866,
+        "median_error_cents": 0.299,
+        "natural_pitch_span_cents": 5.8,
+        "sha256": "dbd3a3101427bc19413531684493e2a07c27fc43a5fb89108c1279f2b2ffd1a4"
+      },
+      {
+        "file": "tar-Db5.wav",
+        "root": 73,
+        "source": "tar-Db5",
+        "start": 0.06680272108843538,
+        "frames": 37384,
+        "calibration_cents": 4.662,
+        "median_error_cents": -0.157,
+        "natural_pitch_span_cents": 11.81,
+        "sha256": "e414b73e47251e7f180ac9f3968e6f1d9f79cbaa25a4f058f4d2dfc5cbd08480"
+      }
+    ],
+    "bytes": 74822,
+    "header": "tar.hdr",
+    "data": "tar.bin"
+  }
+]

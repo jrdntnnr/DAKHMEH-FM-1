@@ -168,6 +168,14 @@ static void fm_glide(uint32_t vi, uint32_t fb)  /* a block: the levels a step (~
     }
 }
 
+/* FM already uses a logarithmic frequency: add decicents directly to avoid
+ * quantising the residual to the oscillator's Q12 correction. */
+static int32_t voice_logfreq(const voice_t *v, int32_t trans16)
+{
+    return fm6_note_logfreq((int32_t)v->note * 16 + lfo_p16[v->trk] + trans16, tune_f) +
+        voice_tuning_dc(v) * 13981 / 10;
+}
+
 /* CTL frames of voice v, added to mono[] (eng_fm6.c fm6_render, with GR!MM's envelope as the ramp) */
 static void fm_block(voice_t *v, const volatile int32_t *e, int32_t *mono, int32_t amp0, int32_t amp1)
 {
@@ -177,7 +185,7 @@ static void fm_block(voice_t *v, const volatile int32_t *e, int32_t *mono, int32
     int32_t bus[FM6_N], lf, lvl, a, da, dc;
     fm_track(t, e);
     p = fm_trk[t].p;
-    lf = fm6_note_logfreq(VP16(v) + (p[FP_TRNSP] - 24) * 16, tune_f);   /* (TUNE: the fine factor) */
+    lf = voice_logfreq(v, (p[FP_TRNSP] - 24) * 16);   /* (TUNE: the fine factor) */
     lvl = (clamp(e[1], 0, 127) - 64) * 24;                    /* BRIGHT: microsteps (MLVL) */
     if (fm_vgen[v - vc] != fm_trk[t].gen) {                   /* (edited while it sounds) */
         fm_vgen[v - vc] = fm_trk[t].gen;

@@ -1,9 +1,9 @@
 # Licensing
 
-GR!MM is free software under the GNU General Public License, version 3 only (`GPL-3.0-only`, full text in
+DAKHMEH, a fork of GR!MM, is free software under the GNU General Public License, version 3 only (`GPL-3.0-only`, full text in
 `LICENSE`). One file in it, `firmware/src/fm6_core.c` (msfa), is Apache-2.0 (`LICENSES/Apache-2.0-msfa.txt`), and two,
 `firmware/src/phys_dsp.c` (DaisySP) and `firmware/src/phys_symp.c` (Rings), are MIT (`LICENSES/MIT-DaisySP.txt`,
-`LICENSES/MIT-Rings.txt`); Apache-2.0 and MIT code may be combined into a GPL-3.0 work, and the firmware built with it is GPL-3.0-only as a whole. The four factory samples are CC0 1.0 (`LICENSES/CC0-1.0.txt`). You may use, study, change and share it. If you give someone a firmware built from it, give them its
+`LICENSES/MIT-Rings.txt`); Apache-2.0 and MIT code may be combined into a GPL-3.0 work, and the firmware built with it is GPL-3.0-only as a whole. DAKHMEH’s oud, qanun and ney samples are CC0; tar is CC BY (see the desert credits below). You may use, study, change and share it. If you give someone a firmware built from it, give them its
 complete source under the same licence too.
 
 GR!MM is a modified version of [Dinghy](https://github.com/zvenson/dinghy) (zvenson), which is based on Felucca and
@@ -66,7 +66,7 @@ Copyright (C) 2026 GR!MM, GPL-3.0-only, unless a line says otherwise.
 
 | What | Licence | Where |
 | --- | --- | --- |
-| GR!MM's four factory samples, URCHIN, LEAVE, NIKOLAI and M-SOFT (`assets/samples/Urchin.wav`, `Leave.wav`, `Nikolai.wav`, `M-Soft.wav`; in the firmware and the browser build's `grimm.wasm` as `firmware/gen/grimm_samples.h`): recordings, Copyright (C) 2026 GR!MM. Free to use for anything, no credit needed | CC0 1.0 Universal | `LICENSES/CC0-1.0.txt` |
+| GR!MM's four factory samples, URCHIN, LEAVE, NIKOLAI and M-SOFT (`assets/samples/Urchin.wav`, `Leave.wav`, `Nikolai.wav`, `M-Soft.wav`; retained as upstream source assets; replaced by desert banks in DAKHMEH builds): recordings, Copyright (C) 2026 GR!MM. Free to use for anything, no credit needed | CC0 1.0 Universal | `LICENSES/CC0-1.0.txt` |
 
 ## Third-party material
 
@@ -89,3 +89,27 @@ reserved, not under the GPL. It marks Dinghy itself and a fork uses its own, so 
 
 "Felucca" and "Hügelton Instruments" are names of Hügelton Instruments; "M-VAVE" and "FM-1" belong to their
 owners. GR!MM (like Dinghy) is not made or endorsed by them, nor by zvenson or designburg.
+
+## SARDAB desert port
+
+The current embedded factory samples replace Grimm's four recordings with
+CC0 oud, qanun and ney plus **CC BY Persian tar**. Full attribution, source
+links and modification notices: [assets/desert/README.md](assets/desert/README.md),
+[sources.json](assets/desert/sources.json), [tar-sources.json](assets/desert/tar-sources.json).
+The tar recordings are not CC0 or GPL. Original Grimm recordings remain in
+assets/samples and can be regenerated explicitly with legacy_grimm_samples().
+Synthesized desert models are adaptations described in docs/SOURCED-SYNTHS.md;
+the rababa patch is our physical-string interpretation.
+
+The browser's tuning data is from the Digital Arabic Maqam Archive (DiArMaqAr),
+https://diarmaqar.netlify.app/api, as used by Tanghim (Khyam Allami and the
+Music Intelligence Lab). Tanghim was inspected as a reference; its plugin and
+MTS-ESP/MPE engines are not embedded here. Archive response metadata and
+versions are retained in web/data and exported tuning presets.
+
+## DAKHMEH wordmark
+
+The Persian دخمه splash is shaped from Reem Kufi (SIL OFL 1.1). The bundled
+font and generated bitmap retain [the font license](LICENSES/OFL-ReemKufi.txt).
+Regenerate with `python3 tools/gen_dakhmeh_wordmark.py`. Upstream GR!MM and
+other contributor notices remain intact.

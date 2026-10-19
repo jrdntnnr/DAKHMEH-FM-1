@@ -106,7 +106,7 @@ static void formant_block(voice_t *v, const volatile int32_t *p, int32_t *mono, 
     int32_t *st = vx_s[v - vc], pitch = VP16(v), damp = amp1 - amp0;
     fres_t r1, r2, r3, r4;
     int32_t fa[3], ba[3], j, buzz, oq, tilt, gv, gn, og, ogk, br = clamp(p[3], 0, 127);
-    uint32_t inc = vinc(pitch), i, te, tp, rp, rn, ratio, f0;
+    uint32_t inc = voice_inc(v, pitch), i, te, tp, rp, rn, ratio, f0;
     uint32_t ph = v->ph[0];
     int32_t y1 = st[0], y2 = st[1], y3 = st[2], y4 = st[3], y5 = st[4], y6 = st[5];
     int32_t y7 = (int32_t)v->ph[1], y8 = (int32_t)v->ph[2], lp = st[6], nst = formant_nz;

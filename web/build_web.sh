@@ -20,13 +20,17 @@ WASM_OPT="$EMSDK/upstream/bin/wasm-opt"
 [ -x "$EMCC" ] || { echo "build_web: no Emscripten (emcc) in $EMSDK or on the PATH"; exit 1; }
 [ -x "$WASM_OPT" ] || { echo "build_web: no wasm-opt (Binaryen) in $EMSDK or on the PATH"; exit 1; }
 mkdir -p build/web web/dist
-"$EMCC" -O2 -Wall -Wno-unused-function -DGRIMM_WEB -DAPP_VER="\"${APP_VER:-1.0}\"" -Ifirmware/src -Ifirmware/gen \
+"$EMCC" -O2 -Wall -Wno-unused-function -DGRIMM_WEB -DAPP_VER="\"${APP_VER:-0.2-dev}\"" -Ifirmware/src -Ifirmware/gen \
     --no-entry -sSTANDALONE_WASM -sFILESYSTEM=0 -sSTACK_SIZE=262144 -sINITIAL_MEMORY=4194304 \
     -o build/web/grimm.wasm firmware/src/grimm.c
 "$WASM_OPT" build/web/grimm.wasm --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
     --enable-mutable-globals --asyncify --pass-arg=asyncify-imports@env.web_yield -O2 -o web/dist/grimm.wasm
 cp web/index.html web/panel.js web/worklet.js assets/fonts/Terminus-LICENSE.txt web/dist/   # (the screen font: SIL OFL 1.1)
-cp web/editor.html web/editor.js web/editor_core.js assets/fonts/PressStart2P-Regular.ttf web/dist/   # (the editor page)
+cp assets/scales.json web/maqam_archive.js web/tuning.js web/scala.js web/editor.html web/editor.js web/editor_core.js assets/fonts/PressStart2P-Regular.ttf web/dist/   # (the editor page)
+cp assets/desert/README.md web/dist/desert-credits.md
+cp assets/desert/sources.json assets/desert/tar-sources.json assets/desert/banks.json assets/desert/source-banks.json web/dist/
+mkdir -p web/dist/data
+cp web/data/*.json web/dist/data/
 mkdir -p web/dist/LICENSES                       # (the pages ship with their licences: linked from their footers)
 cp LICENSE LICENSING.md web/dist/ && cp LICENSES/*.txt web/dist/LICENSES/ && touch web/dist/.nojekyll
 echo "web: web/dist ($(wc -c < web/dist/grimm.wasm | tr -d ' ') B wasm)"

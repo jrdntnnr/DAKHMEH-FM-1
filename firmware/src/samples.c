@@ -104,6 +104,8 @@ enum { SS_EMPTY, SS_READY, SS_SCAN };
 typedef struct {
     volatile uint8_t ready;                     /* main loop: it plays (the audio ISR reads data, n, root16) */
     uint8_t state;                              /* main loop: SS_ */
+    const uint8_t *zones;                     /* v2: checked 24-byte zones, or NULL for tape loops */
+    uint8_t nz;
     uint16_t seg;                               /* SS_SCAN: the next segment */
     const uint8_t *data;                        /* its ADPCM (XIP) */
     uint32_t n, len, crc, want;                 /* samples, data bytes; the CRC so far, the header's */
@@ -127,6 +129,25 @@ static uint32_t smp_crc(uint32_t c, const uint8_t *p, uint32_t n)   /* CRC-32 (z
     return c;
 }
 
+/* v2: one continuous ADPCM stream; up to 16 non-overlapping one-shot key zones.
+ * Header 64 onward: start,n,reserved,reserved (u32), root16(i16),lo,hi,flags(0),3 reserved.
+ * h[36] is the total PCM length. No extra decode buffers or seek indexes. */
+static int smp_header_ok(const uint8_t *h)
+{
+    uint32_t len=rd32(h+16), n=rd32(h+36), ver=rd16(h+4), i, end=0, hi=0;
+    if(rd32(h)!=SMP_MAGIC || (ver!=1u && ver!=2u) || !h[6] || len==0 || len>SMP_MAX_DATA ||
+       rd32(h+32)!=0 || n<64 || n>len*2u || rd32(h+48)!=SMP_RATE_Q16) return 0;
+    if(ver==1u) return h[6]==1u;
+    if(h[6]>16u || ~smp_crc(smp_crc(0xFFFFFFFFu,h,28),h+32,SMP_HDR_LEN-32u)!=rd32(h+28)) return 0;
+    for(i=0;i<h[6];i++) {
+        const uint8_t *z=h+64+24*i;
+        uint32_t start=rd32(z), count=rd32(z+4);
+        if(start<end || start>=n || count<64 || count>n-start || rd16(z+16)>127u*16u ||
+           z[18]>z[19] || z[19]>127u || (i && z[18]<=hi) || z[20]) return 0;
+        end=start+count;hi=z[19];
+    }
+    return 1;
+}
 /* main loop: look at slot k's header again; a good one starts its check (SS_SCAN), else the slot is empty */
 static void smp_look(uint32_t k)
 {
@@ -141,9 +162,9 @@ static void smp_look(uint32_t k)
     h = f + k * SMP_SLOT_SIZE;
     len = rd32(h + 16);
     n = rd32(h + 36);
-    if (rd32(h) != SMP_MAGIC || rd16(h + 4) != 1u || h[6] < 1u || len == 0u || len > SMP_MAX_DATA ||
-        rd32(h + 32) != 0u || n < 64u || n > len * 2u || rd32(h + 48) != SMP_RATE_Q16)
-        return;
+    if (!smp_header_ok(h)) return;
+    s->zones = rd16(h+4)==2u ? h+64 : 0;
+    s->nz = h[6];
     for (i = 0; i < 8u; i++)
         s->name[i] = h[8 + i] >= 32u && h[8 + i] < 127u ? (char)h[8 + i] : 0;
     s->name[8] = 0;
@@ -354,7 +375,7 @@ static void smp_frame(const uint8_t *f, uint32_t n, int silent)
         const uint8_t *data = sample_flash() + slot * SMP_SLOT_SIZE + SMP_DATA_OFF;
         if ((int32_t)slot != up_slot)
             rc = 4;
-        else if (d != SMP_HDR_LEN || rd32(sx_buf) != SMP_MAGIC || (len = rd32(sx_buf + 16)) != up_next - SMP_DATA_OFF)
+        else if (d != SMP_HDR_LEN || !smp_header_ok(sx_buf) || (len = rd32(sx_buf + 16)) != up_next - SMP_DATA_OFF)
             rc = 5;
         else if ((crc = ~smp_crc(0xFFFFFFFFu, data, len)) != rd32(sx_buf + 20))
             rc = 5;

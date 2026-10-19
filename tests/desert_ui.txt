@@ -1,0 +1,10 @@
+# Select C Rast, independent chromatic layout, then play the E half-flat key.
+3500 btn 3
+3550 enc 3 16
+5500 keys 2048
+6200 keys 0
+6500 btn 3
+6600 btn 3
+6700 btn 3
+6800 enc 2 13
+7000 end

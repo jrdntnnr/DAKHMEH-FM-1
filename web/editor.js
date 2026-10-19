@@ -11,6 +11,18 @@ import { Client, MidiTransport, VirtualFM1, LiveSender, findFM1, HEAD, CMD, OBJ,
          recordOk, parseSound, buildRecord, soundTitle, makeBackup, checkBackup, restoreBackup, makeSlot, noteFromName,
          sampleName, noteName, pack7, hex } from "./editor_core.js";
 
+import {mountArchive} from './maqam_archive.js';
+import {defaultTuning,encodeTuning,decodeTuning,drawTuning} from './tuning.js';
+const tuning = Array.from({length:4},defaultTuning);
+let scaleCatalog = [];
+const tuningLive = new LiveSender(async t => {
+  if (conn?.info.proto >= 3) await conn.client.tuning(t, encodeTuning(tuning[t]));
+}, 15);
+function engTuning(t) { engSend([...HEAD,CMD.TUNING,1,t,...pack7(encodeTuning(tuning[t]))]); }
+function changeTuning(next) {
+  tuning[selT]=next; drawTuningKeys(); touchedAt=performance.now(); engTuning(selT); tuningLive.set(selT); drawEditor();
+}
+tuningLive.onError=e=>say(`TUNING: ${errText(e)}`, 'err');
 const $ = (id) => document.getElementById(id);
 function el(tag, attrs, parent, text) {
   const e = document.createElement(tag);
@@ -117,7 +129,7 @@ function startEngine() {                                     // at once; the bro
       };
       node.port.postMessage({ type: "load", wasm: wasm.slice(0), master: 760 });
     });
-    for (let t = 0; t < 4; t++) engTrack(t);                 // (the page's four sounds, the page's track)
+    for (let t = 0; t < 4; t++) { engTrack(t); engTuning(t); }                 // (the page's four sounds, the page's track)
     engSend([...HEAD, CMD.TRACK, 2, selT]);
     await ac.resume();
   })().catch((e) => { screenText(["NO SOUND HERE:", String(e.message || e).slice(0, 26).toUpperCase()]); });
@@ -131,14 +143,14 @@ function setConn(c) {
   if (conn && conn.transport.close) conn.transport.close();
   conn = c;
   const s = $("conn");
-  s.textContent = !c ? "NOT CONNECTED" : c.kind === "virtual" ? `VIRTUAL FM-1 · GR!MM ${c.info.firmware}` : `FM-1 · GR!MM ${c.info.firmware}`;
+  s.textContent = !c ? "NOT CONNECTED" : c.kind === "virtual" ? `VIRTUAL FM-1 · DAKHMEH ${c.info.firmware}` : `FM-1 · DAKHMEH ${c.info.firmware}`;
   s.classList.toggle("on", !!c);
   const t = $("info");
   t.textContent = "";
   if (c) {
     const i = c.info;
     [["CONNECTED TO", c.kind === "virtual" ? "THE VIRTUAL FM-1 (THIS PAGE)" : `THE FM-1 OVER USB (${c.transport.output.name})`],
-     ["FIRMWARE", "GR!MM " + i.firmware], ["EDITOR PROTOCOL", i.proto + (c.live ? " (LIVE EDITING)" : " (NO LIVE EDITING: INSTALL 26B2)")],
+     ["FIRMWARE", "DAKHMEH " + i.firmware], ["EDITOR PROTOCOL", i.proto + (c.live ? " (LIVE EDITING)" : " (NO LIVE EDITING: INSTALL 26B2)")],
      ["USER SOUND SLOTS", i.sounds], ["FACTORY SOUNDS", i.factory], ["SAMPLE SLOTS IN USE", `${i.samplesUsed} OF ${i.sampleSlots}`]]
       .forEach(([k, v]) => { const r = el("tr", {}, t); el("td", {}, r, k); el("td", {}, r, String(v)); });
   }
@@ -150,9 +162,9 @@ async function connectFM1() {
   await job("CONNECT", async () => {
     say("ASKING FOR MIDI ACCESS…");
     const access = await navigator.requestMIDIAccess({ sysex: true });
-    say("LOOKING FOR GR!MM ON THE MIDI PORTS…");
+    say("LOOKING FOR DAKHMEH ON THE MIDI PORTS…");
     const p = await findFM1(access, midiLog);
-    if (!p) throw new EditorError("NO FM-1 WITH GR!MM 26A OR LATER FOUND (USB DATA CABLE? ANOTHER APP ON ITS MIDI PORT?) SEE THE MIDI LOG", 0);
+    if (!p) throw new EditorError("NO FM-1 WITH DAKHMEH 26A OR LATER FOUND (USB DATA CABLE? ANOTHER APP ON ITS MIDI PORT?) SEE THE MIDI LOG", 0);
     const transport = new MidiTransport(p.input, p.output, midiLog), client = new Client(transport), info = await client.info();
     if (!PROTOS.includes(info.proto)) throw new EditorError(`THE FM-1 SPEAKS EDITOR PROTOCOL ${info.proto}; THIS PAGE KNOWS ${PROTOS.join(" AND ")}`, 0);
     setConn({ client, info, kind: "fm1", transport, live: info.proto >= 2 });
@@ -166,11 +178,17 @@ async function tryVirtual() {
     vf.warmUp();
     const info = await vfc.info();
     setConn({ client: vfc, info, kind: "virtual", transport: vf, live: true });
-    return afterConnect(false, "(THE VIRTUAL FM-1: GR!MM'S OWN CODE IN THIS PAGE, NOTHING IS KEPT)");
+    return afterConnect(false, "(THE VIRTUAL FM-1: DAKHMEH'S OWN CODE IN THIS PAGE, NOTHING IS KEPT)");
   });
 }
 // connected: the FM-1's four tracks into the page (the virtual one takes the page's), then its user slots
 async function afterConnect(read, where) {
+  if (!scaleCatalog.length) { const r=await fetch('scales.json'); if(!r.ok)throw new Error('Scale catalog unavailable'); scaleCatalog=await r.json(); }
+  if (conn.info.proto >= 3) for(let t=0;t<4;t++) {
+    if(read) tuning[t]=decodeTuning(await conn.client.tuning(t));
+    else await conn.client.tuning(t,encodeTuning(tuning[t]));
+    engTuning(t);
+  }
   if (conn.live && read) {
     say("READING THE FOUR TRACKS…");
     let sel = 0;
@@ -190,8 +208,8 @@ async function afterConnect(read, where) {
   drawTracks(), drawEditor(), drawSlots();
   show("editor");
   history.replaceState(null, "", "#editor");
-  return `CONNECTED ${where}: GR!MM ${conn.info.firmware}` + (conn.live ? `, TRACK ${selT + 1} IN THE EDITOR (LIVE)` :
-    ": ITS GR!MM IS OLDER THAN 26B2, SO THE SLIDERS PLAY ONLY HERE; SOUNDS, SAMPLES, BACKUP WORK");
+  return `CONNECTED ${where}: DAKHMEH ${conn.info.firmware}` + (conn.live ? `, TRACK ${selT + 1} IN THE EDITOR (LIVE)` :
+    ": ITS DAKHMEH IS OLDER THAN 26B2, SO THE SLIDERS PLAY ONLY HERE; SOUNDS, SAMPLES, BACKUP WORK");
 }
 $("b-connect").onclick = connectFM1;
 $("b-try").onclick = tryVirtual;
@@ -229,13 +247,20 @@ async function selectTrack(t) {
 }
 let polling = false;
 setInterval(async () => {                                    // the FM-1's knobs and track: the page follows (polled)
-  if (!conn || !conn.live || conn.kind !== "fm1" || busy || polling || !live.idle || document.hidden) return;
+  if (!conn || !conn.live || conn.kind !== "fm1" || busy || polling || !live.idle || !tuningLive.idle || document.hidden) return;
   if (performance.now() - touchedAt < 800 || /SELECT|INPUT/.test(document.activeElement.tagName) && document.activeElement.type !== "range") return;
   polling = true;
   try {
     let { sel, rec, name } = await conn.client.track(selT, true);
     if (sel !== selT) selT = sel, engSend([...HEAD, CMD.TRACK, 2, sel]), { rec, name } = await conn.client.track(sel, true), drawTracks();
     if (!live.idle || performance.now() - touchedAt < 800) return;
+    if(conn.info.proto>=3) {
+      const b=await conn.client.tuning(selT,null,true);
+      if(!tuningLive.idle || performance.now()-touchedAt<800)return;
+      if(b.some((x,i)=>x!==encodeTuning(tuning[selT])[i])) {
+        tuning[selT]=decodeTuning(b);engTuning(selT);drawTuningKeys();drawEditor();
+      }
+    }
     const mine = buildRecord(tracks[selT]);
     if (rec.slice(3, 50).some((x, k) => x !== mine[3 + k]) || name !== homeName(selT)) {
       tracks[selT] = fromDevice(rec, selT), label[selT] = name, labelEng[selT] = tracks[selT].eng;
@@ -248,6 +273,7 @@ function trackTitle(t) {
   return !s ? "—" : homeName(t) ? `${homeName(t)} · ${meta.engines[s.eng].name}` : trackName(t);
 }
 function drawTracks() {
+  drawTuningKeys();
   const b = $("tracks");
   b.textContent = "";
   for (let t = 0; t < 4; t++) {
@@ -260,7 +286,7 @@ function drawTracks() {
 function drawTitle() {
   const s = tracks[selT];
   $("ed-title").textContent = `T${selT + 1}: ${s ? trackName(selT) : ""}` + (s && JSON.stringify(s) !== loaded[selT] ? " *" : "");
-  $("ed-from").textContent = from[selT] + (conn && conn.live ? ` · LIVE ON THE ${conn.kind === "virtual" ? "VIRTUAL " : ""}FM-1` : conn ? " · HERE ONLY (THE FM-1'S GR!MM HAS NO LIVE EDITING)" : " · HERE ONLY (NOT CONNECTED)");
+  $("ed-from").textContent = from[selT] + (conn && conn.live ? ` · LIVE ON THE ${conn.kind === "virtual" ? "VIRTUAL " : ""}FM-1` : conn ? " · HERE ONLY (THE FM-1'S DAKHMEH HAS NO LIVE EDITING)" : " · HERE ONLY (NOT CONNECTED)");
 }
 
 // ------------------------------------------------------------------ sounds
@@ -366,7 +392,7 @@ $("b-export").onclick = () => exportSound(pickRec(), pick.fact ? meta.factory[pi
 $("b-import").onclick = () => $("f-import").click();
 async function readSoundFile(f) {
   const j = JSON.parse(await f.text()), r = Uint8Array.from(j.rec || []);
-  if (j.format !== "grimm-sound" || r.length !== 64 || !recordOk(r)) throw new Error("NOT A GR!MM SOUND FILE");
+  if (j.format !== "grimm-sound" || r.length !== 64 || !recordOk(r)) throw new Error("NOT A DAKHMEH SOUND FILE");
   return r;
 }
 $("f-import").onchange = async (e) => {
@@ -382,7 +408,7 @@ $("f-import").onchange = async (e) => {
 };
 function exportSound(r, name) {
   const t = name || soundTitle(r, meta) || "SOUND";
-  download(`${t.replace(/[^A-Z0-9]+/g, "_")}.grimmsound`, JSON.stringify({ format: "grimm-sound", version: 1, name: t, rec: [...r] }));
+  download(`${t.replace(/[^A-Z0-9]+/g, "_")}.dakhmehsound`, JSON.stringify({ format: "grimm-sound", version: 1, name: t, rec: [...r] }));
   say(`EXPORTED: ${t}`, "ok");
 }
 
@@ -418,6 +444,12 @@ function drawEditor() {
   const ed = $("ed"), s = tracks[selT];
   ed.textContent = "";
   if (!s) return;
+  if(scaleCatalog.length) {
+    const g=el('div',{cls:'grp tuning-panel'},ed);
+    drawTuning(g,tuning[selT],scaleCatalog,changeTuning,e=>say(errText(e),'err'));
+    const archive=el('details',{},g);el('summary',{},archive,'Documented maqam tuning systems');
+    archive.ontoggle=()=>{if(archive.open&&!archive.dataset.loaded){archive.dataset.loaded='1';mountArchive(archive,()=>tuning[selT],changeTuning,e=>say(errText(e),'err'));}};
+  }
   const eng = meta.engines[s.eng];
   let g = el("div", { cls: "grp" }, ed);
   el("h3", {}, g, "SOUND");
@@ -608,6 +640,9 @@ const KEYMAP = {};
 "sdfhjl;'".split("").forEach((c, i) => { KEYMAP[c] = [1, 3, 5, 8, 10, 13, 15, 17][i]; });
 "qwertyuio".split("").forEach((c, i) => { KEYMAP[c] = 18 + i; });
 const keyEls = [];
+function drawTuningKeys() {
+  keyEls.forEach((e,k)=>e.classList.toggle('retuned',!!(tuning[selT].mode && tuning[selT].on[(k+5)%12])));
+}
 function drawKeys() {
   const k = $("kbd"), ww = 100 / WHITE.length;
   WHITE.forEach((key, i) => {
@@ -659,7 +694,7 @@ function drawSamples() {
     const r = el("div", {}, d);
     el("div", { cls: "px" }, r, s.state === 1 ? `${s.name || "(NO NAME)"} · ${(s.n / 22050).toFixed(2)} S` +
       (s.root !== null ? ` · ROOT ${noteName(s.root)}` : "") : s.state === 2 ? "BEING CHECKED…" :
-      s.state < 0 ? "IN USE (ITS NAME DID NOT FIT IN THE FM-1'S ANSWER: GR!MM BEFORE 26B2)" : "EMPTY");
+      s.state < 0 ? "IN USE (ITS NAME DID NOT FIT IN THE FM-1'S ANSWER: DAKHMEH BEFORE 26B2)" : "EMPTY");
     const drop = el("div", { cls: "drop px" }, r, "DROP A WAV HERE, OR CLICK");
     const file = el("input", { type: "file", accept: ".wav,audio/wav" }, r);
     file.hidden = true;
@@ -704,12 +739,12 @@ function drawSamples() {
 }
 $("b-sinfo").onclick = sampleInfo;
 $("b-sfactory").onclick = () => {                            // RESTORE: the four factory samples, over whatever is there
-  if (!confirm("RESTORE THE FACTORY SAMPLES?\n\nThis REPLACES all four sample slots on the FM-1 with GR!MM's factory samples " +
-               "(URCHIN, LEAVE, NIKOLAI, M-SOFT). Your own samples in them are gone: keep their WAV files.")) return;
+  if (!confirm("RESTORE THE FACTORY SAMPLES?\n\nThis REPLACES all four sample slots on the FM-1 with DAKHMEH's factory samples " +
+               "(OUD, QANUN, NEY AIR, TAR). Your own samples in them are gone: keep their WAV files.")) return;
   job("RESTORE FACTORY SAMPLES", async () => {
     say("WRITING THE FOUR FACTORY SAMPLES (ABOUT 5 S)…");
     try { smpInfo = await conn.client.smpFactory(); } catch (e) {
-      if (e.rc === 97) throw new EditorError("NO ANSWER: THE FM-1'S GR!MM IS OLDER THAN 26C (NO FACTORY SAMPLES)", 97);
+      if (e.rc === 97) throw new EditorError("NO ANSWER: THE FM-1'S DAKHMEH IS OLDER THAN 26C (NO FACTORY SAMPLES)", 97);
       throw e;
     }
     drawSamples();
@@ -720,7 +755,7 @@ $("b-sfactory").onclick = () => {                            // RESTORE: the fou
 // ------------------------------------------------------------------ backup
 $("b-backup").onclick = () => job("BACKUP", async () => {
   const b = await makeBackup(conn.client, conn.info, (i, n, what) => { progress(i, n); say(`READING ${what.toUpperCase()}…`); });
-  download(`grimm-backup-${stamp()}.json`, JSON.stringify(b, null, 1));
+  download(`dakhmeh-backup-${stamp()}.json`, JSON.stringify(b, null, 1));
   return "BACKUP MADE: ALL 64 SOUNDS, SLOTS A–D, THE SETTINGS (DOWNLOADED)";
 });
 $("b-restore").onclick = () => $("f-restore").click();
@@ -733,7 +768,7 @@ $("f-restore").onchange = async (e) => {
   if (!confirm(`RESTORE ${f.name}?\n\nThis REPLACES all 64 user sounds, slots A–D and the settings on the FM-1. A backup of what it holds now is made (downloaded) first.`)) return;
   await job("RESTORE", async () => {
     const before = await makeBackup(conn.client, conn.info, (i, n) => { progress(i, n); say("FIRST, A BACKUP OF WHAT THE FM-1 HOLDS NOW…"); });
-    download(`grimm-backup-before-restore-${stamp()}.json`, JSON.stringify(before, null, 1));
+    download(`dakhmeh-backup-before-restore-${stamp()}.json`, JSON.stringify(before, null, 1));
     await restoreBackup(conn.client, objs, conn.info, (i, n, what) => { progress(i, n); say(`WRITING ${what.toUpperCase()}…`); });
     for (let i = 0; i < objs.length; i++) {                  // read back: as written
       const d = await conn.client.get(objs[i].id, objs[i].data.length);
@@ -757,13 +792,13 @@ $("f-restore").onchange = async (e) => {
     for (let t = 0; t < 4; t++) {
       const r = await vfc.track(t, true);
       tracks[t] = fromDevice(r.rec, t), label[t] = r.name, labelEng[t] = tracks[t].eng;
-      loaded[t] = JSON.stringify(tracks[t]), from[t] = "AS GR!MM STARTS";
+      loaded[t] = JSON.stringify(tracks[t]), from[t] = "AS DAKHMEH STARTS";
     }
   } catch (e) {
-    say(`COULD NOT LOAD GR!MM (grimm.wasm): ${e.message || e}. OPEN THIS PAGE FROM A WEB SERVER, NOT A FILE.`.toUpperCase(), "err");
+    say(`COULD NOT LOAD DAKHMEH (grimm.wasm): ${e.message || e}. OPEN THIS PAGE FROM A WEB SERVER, NOT A FILE.`.toUpperCase(), "err");
     return;
   }
-  screenText(["CLICK ANYWHERE:", "GR!MM'S SOUND", "AND SCREEN"]);
+  screenText(["CLICK ANYWHERE:", "DAKHMEH'S SOUND", "AND SCREEN"]);
   startEngine();
   drawKeys();
   drawSlots();

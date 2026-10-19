@@ -20,14 +20,14 @@
 #include "phys_dsp.c"
 #include "phys_symp.c"
 
-enum { PM_MODAL, PM_STRING, PM_MEMB, PM_SYMP, PM_COUNT };
+enum { PM_MODAL, PM_STRING, PM_MEMB, PM_SYMP, PM_SANTUR, PM_COUNT };
 #define PHYS_BRIT 80                            /* Felucca's defaults for the knobs GR!MM leaves out */
 #define PHYS_POS 20
 #define PHYS_ACC 90
 #define PHYS_VEL 100
 /* output: model 1.0 -> this (Felucca's VOICE_FS scale), then a soft knee; per model (a strike of all the modes in
  * phase peaks high but is short) */
-static const int32_t PHYS_GAIN[PM_COUNT] = {28000, 12000, 90000, 12000};
+static const int32_t PHYS_GAIN[PM_COUNT] = {28000, 12000, 90000, 12000, 22000};
 
 typedef struct {
     uint8_t model;                              /* PM_* the state belongs to */
@@ -37,9 +37,9 @@ typedef struct {
         px_symp_t y;
     } u;
 } phys_slot_t;
-static phys_slot_t ph_slot[NV];
+static phys_slot_t ph_slot[PHYS_NV];
 
-static const char *const N_PHYS_MODEL[PM_COUNT] = {"MODAL", "STRING", "MEMBRANE", "SYMPATH"};
+static const char *const N_PHYS_MODEL[PM_COUNT] = {"MODAL", "STRING", "MEMBRANE", "SYMPATH", "SANTUR"};
 static const char *const N_PHYS_CHORD[8] = {"OCT", "5TH", "4TH", "MAJ", "MIN", "SUS", "7TH", "ROOT"};
 /* SYMP: the sympathetic strings above the note, cents (CHORD's names) */
 static const int16_t PHYS_CHORDS[7][PX_NSYMP] = {
@@ -58,6 +58,7 @@ static void phys_reset(phys_slot_t *S, uint32_t md, uint32_t seed)
     seed |= 1u;
     switch (md) {
     case PM_STRING:
+    case PM_SANTUR:
     case PM_SYMP:                               /* (the main string is the union's px_string_t) */
         S->u.s.rng = seed;
         S->u.s.src = 1u << 30;
@@ -91,14 +92,19 @@ static void phys_begin(voice_t *v)              /* a note from silence: from res
 }
 
 /* SYMP: the sympathetic strings' pitches (cycles Q32) by CHORD: a chord above the note, or ROOT (C) */
-static void phys_symp_pitches(int32_t chord, int32_t pitch16, uint32_t *f)
+static void phys_symp_pitches(const voice_t *v, int32_t chord, int32_t pitch16, uint32_t *f)
 {
     uint32_t c = (uint32_t)clamp(chord, 0, 127) >> 4, k;   /* 0..7 */
     for (k = 0; k < PX_NSYMP; k++) {
         int32_t p16 = PHYS_DETUNE[k];
         p16 += c < 7u ? pitch16 + ((PHYS_CHORDS[c][k] * 41) >> 8)   /* cents -> 1/16 semitones (0.16) */
                       : (48 + (k == 1u ? 7 : k == 2u ? 12 : 0)) * 16;
-        f[k] = vinc(p16);
+        if (c < 7u) f[k] = voice_inc(v, p16);
+        else {
+            uint32_t note = 48u + (uint32_t)clamp(trk[v->trk].root, 0, 11) + (k == 1u ? 7u : k == 2u ? 12u : 0u);
+            f[k] = tuning_rate(pitch_inc(clamp(tuning_p16(v->trk, note) + PHYS_DETUNE[k], 0, 2047)),
+                                tune_f + tuning_fine(v->trk, note));
+        }
     }
 }
 
@@ -106,10 +112,10 @@ static void phys_symp_pitches(int32_t chord, int32_t pitch16, uint32_t *f)
 static void phys_block(voice_t *v, const volatile int32_t *p, int32_t *mono, int32_t amp0, int32_t amp1)
 {
     phys_slot_t *S = &ph_slot[v - vc];
-    uint32_t md = phys_model(p), i, f0 = vinc(VP16(v));
+    uint32_t md = phys_model(p), i, f0 = voice_inc(v, VP16(v));
     int32_t y[CTL], ax[CTL], damp = amp1 - amp0;
     int32_t strc = clamp(p[1], 0, 127) * 516, brit = PHYS_BRIT * 516, dmp = clamp(p[2], 0, 127) * 516;
-    int32_t pos = PHYS_POS, k4 = clamp(p[3], 0, 127), bow = k4 * 206;   /* BOW: Dust at up to 0.4 */
+    int32_t pos = phys_model(p) == PM_SANTUR ? clamp(p[3],0,127) : PHYS_POS, k4 = clamp(p[3], 0, 127), bow = k4 * 206;   /* BOW: Dust at up to 0.4 */
     int32_t acc = clamp(PHYS_ACC * PHYS_VEL * 4, 0, 65536);   /* ACC at the velocity, Q16 */
     int32_t g = PHYS_GAIN[md], sh = bow && (md == PM_MODAL || md == PM_STRING) ? 18 : 20;   /* (bowed: x 4, as loud as
                                                                                     * the other sources) */
@@ -143,7 +149,18 @@ static void phys_block(voice_t *v, const volatile int32_t *p, int32_t *mono, int
     default: {                                  /* SYMP */
         px_string_blk_t B;
         uint32_t f[PX_NSYMP];
-        phys_symp_pitches(p[1], VP16(v), f);
+        if (md == PM_SANTUR) {
+            int32_t spread = clamp(p[1], 0, 127) * 12 / 127;
+            for (i=0; i<PX_NSYMP; i++) f[i] = tuning_rate(f0, ((int32_t)i-1)*spread*2367/1000);
+            /* SARDAB's reduced SIM-SANTUR design: a hammer burst into three detuned strings. */
+            px_string_block(&B, &S->u.y.s, f0, 16384, brit, dmp, acc, 0, pos*516);
+            px_string_excite(&B, &S->u.y.s, ax, CTL);
+            px_symp_block(&S->u.y, f, brit, dmp, 1048576);
+            px_symp_run(&S->u.y, ax, y, CTL);
+            for(i=0;i<(uint32_t)CTL;i++) y[i]-=ax[i];
+            break;
+        }
+        phys_symp_pitches(v, p[1], VP16(v), f);
         px_string_block(&B, &S->u.y.s, f0, 16384 - k4 * 129, brit, dmp, acc, 0, 0);   /* BUZZ: STRC 0.25 .. 0 */
         px_string_excite(&B, &S->u.y.s, ax, CTL);
         px_string_run(&B, &S->u.y.s, ax, y, CTL);
@@ -174,6 +191,7 @@ static void phys_text(const volatile int32_t *p, uint32_t k, char *s)   /* param
     case 3:
         if (md == PM_MEMB) s = put_s(s, "BEND ");
         else if (md == PM_SYMP) s = put_s(s, "BUZZ ");
+        else if (md == PM_SANTUR) { put_s(put_u(s,pc), "%"); return; }
         else if (!p[3]) { put_s(s, "STRUCK"); return; }
         put_s(put_u(s, pc), "%");
         return;

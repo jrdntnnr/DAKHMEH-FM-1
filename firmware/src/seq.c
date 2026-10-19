@@ -99,7 +99,7 @@ static void seq_note(uint32_t t, uint32_t note, uint32_t gate, uint32_t chord)
         f = 0;
         note_off(t, S->off_note[0], SRC_SEQ, 0);
     }
-    note_on(t, note, note, SRC_SEQ, 0, chord ? (int32_t)chord : -1);   /* (its origin: the note; a note step: the
+    note_on(t, note, trk[t].map == MAP_SEQ ? sc_snap(t, note) : note, SRC_SEQ, 0, chord ? (int32_t)chord : -1);   /* (its origin: the note; a note step: the
                                                  * track's chord mode) */
     S->off_note[f] = (uint8_t)note;
     S->off_left[f] = gate ? gate : 1u;

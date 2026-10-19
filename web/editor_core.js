@@ -8,9 +8,10 @@
 
 export const HEAD = [0x7d, 0x47, 0x52];
 export const CMD = { SMP_BEGIN: 11, SMP_WRITE: 12, SMP_END: 13, SMP_ERASE: 14, SMP_INFO: 15, SMP_FACTORY: 16, INFO: 20, GET: 21, PUT: 22,
-                     TRACK: 23 };
-export const PROTOS = [1, 2];                              // the editor protocols this page knows (2: TRACK)
+                     TRACK: 23, TUNING: 24 };
+export const PROTOS = [1, 2, 3];                              // the editor protocols this page knows (2: TRACK)
 export const OBJ = { SET: 0, SLOT: 1, SND: 16, FACT: 80 };
+export const factoryObject = i => i < 48 ? OBJ.FACT + i : 5 + i - 48;
 const BEGIN = 0, DATA = 1, COMMIT = 2, ABORT = 3;
 export const RC = {
   1: "the FM-1 did not accept the request (arguments)",
@@ -100,6 +101,13 @@ export class Client {
     const r = await this.req(CMD.TRACK, [1, t, ...pack7(rec), ...nm], 1500, true);   // -> the FM-1's track
     if (r[3]) throw new EditorError(RC[r[3]] || `rc ${r[3]}`, r[3]);
     return r[2];
+  }
+  async tuning(t, data = null, quiet = false) {
+    const r = await this.req(CMD.TUNING, [data ? 1 : 0, t, ...(data ? pack7(data) : [])], 1500, quiet);
+    if (r[2]) throw new EditorError(RC[r[2]] || `rc ${r[2]}`, r[2]);
+    const b = unpack7(r.slice(3));
+    if (b.length !== 59) throw new EditorError("Invalid tuning reply", 99);
+    return b;
   }
   async select(t) { return (await this.req(CMD.TRACK, [2, t], 1500))[2]; }
   async get(obj, size, progress) {
@@ -327,7 +335,7 @@ export function emptyRecord() { return new Uint8Array(SND).fill(0xff); }
 export const isEmpty = (r) => r.every((x) => x === 0xff);
 export function recordOk(r) {
   const dv = new DataView(r.buffer, r.byteOffset, SND);
-  return r[0] === 0x54 && r[1] < 9 && r[3] < 7 && dv.getUint32(60, true) === crc32(r.subarray(0, 60));
+  return r[0] === 0x54 && r[1] < 10 && r[3] < 7 && dv.getUint32(60, true) === crc32(r.subarray(0, 60));
 }
 export function parseSound(r, meta) {                        // a record -> a sound (FM: its patch, or the PATCH's as built)
   const fm = r[3] === 1 && r[18] & 0x80 ? r.slice(18, 50) : meta.fmPatches[Math.min(r[4], meta.fmPatches.length - 1)].fm;
@@ -375,7 +383,7 @@ export async function makeBackup(client, info, progress) {
            date: new Date().toISOString().replace("T", " ").slice(0, 19), objects };
 }
 export function checkBackup(b, info) {                       // -> [{id, data, what}] or throws (nothing written)
-  if (!b || b.format !== "grimm-backup" || b.version !== 1) throw new EditorError("not a GR!MM backup file", 90);
+  if (!b || b.format !== "grimm-backup" || b.version !== 1) throw new EditorError("not a compatible DAKHMEH backup file", 90);
   if (b.fmt !== info.fmt) throw new EditorError(`the backup's format is ${b.fmt}, the FM-1's is ${info.fmt}`, 90);
   const sizes = new Map(backupObjects(info).map(([id, size, what]) => [id, [size, what]]));
   return b.objects.map((o) => {

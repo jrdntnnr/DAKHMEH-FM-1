@@ -1,15 +1,15 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only
      Copyright (C) 2026 GR!MM
-     GR!MM's editor: the FM-1's sounds, samples and a backup, over Web MIDI SysEx (docs/EDITOR_PROTOCOL.md). Its sections
+     DAKHMEH's editor: the FM-1's sounds, samples and a backup, over Web MIDI SysEx (docs/EDITOR_PROTOCOL.md). Its sections
      in a left menu and its way of editing (the tracks' sounds, live, as the knobs) follow SLOOP's editor (isod89/sloop-fm1,
-     web/, GPL-3.0); its code and look are GR!MM's. The sounds play here in GR!MM's own engine (grimm.wasm, the firmware's
+     web/, GPL-3.0); its code and look are DAKHMEH's. The sounds play here in DAKHMEH's own engine (grimm.wasm, the firmware's
      code), its screen beside the keys. The font: Press Start 2P (SIL OFL 1.1, LICENSES/OFL-PressStart2P.txt). -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GR!MM editor</title>
+<title>DAKHMEH editor</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 fill=%22%230b0b0a%22/%3E%3Crect x=%223%22 y=%223%22 width=%2210%22 height=%2210%22 fill=%22%23c8321e%22/%3E%3C/svg%3E">
 <style>
 @font-face { font-family: "Press Start 2P"; src: url("PressStart2P-Regular.ttf") format("truetype"); font-display: block; }
@@ -96,11 +96,26 @@ canvas#alg { display: block; width: 100%; max-width: 432px; image-rendering: pix
 .play .keys { flex: 1 1 360px; min-width: 0; }
 .pickbar { position: sticky; top: 46px; z-index: 2; background: var(--k); padding: 4px 0; }
 a.lnk { color: var(--l); }
+
+.tuning-panel { grid-column: 1 / -1; min-width: 0; }
+.tuning-panel > label { display: inline-flex; flex-direction: column; gap: 5px; margin: 0 12px 10px 0; max-width: 100%; }
+.tuning-panel select { max-width: 100%; }
+.tuning-panel .pitch-grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 10px; }
+.pitch-cell { padding: 10px; border: 1px solid var(--m); min-width: 0; }
+.pitch-cell button { width: 100%; }
+.pitch-cell small { display:block; margin: 8px 0 3px; }
+.pitch-cell input[type=number] { box-sizing: border-box; font: 15px/1.4 monospace; }
+.pitch-cell label { display: block; margin-top: 8px; font: 12px/1.4 system-ui; }
+.tuning-panel details { margin-top: 16px; }
+.tuning-panel details select { display:block; width: min(100%,600px); margin: 8px 0; }
+#kbd .retuned::after { content:'−'; position:absolute; bottom:20px; left:30%; width:40%; text-align:center; background:var(--a); color:var(--k); }
+@media(max-width:800px) { .tuning-panel .pitch-grid {grid-template-columns:repeat(3,minmax(0,1fr));} }
+@media(max-width:480px) { .tuning-panel .pitch-grid {grid-template-columns:repeat(2,minmax(0,1fr));} }
 </style>
 </head>
 <body>
 <header>
-  <div class="tag px">GR!MM</div>
+  <div class="tag px">DAKHMEH <span lang="fa" dir="rtl" style="font: 28px sans-serif">دخمه</span></div>
   <div class="bar"><b class="px">EDITOR</b><span><a class="lnk px" href="index.html">DEMO</a> · <span id="conn" class="px">NOT CONNECTED</span></span></div>
 </header>
 <div class="wrap">
@@ -112,7 +127,7 @@ a.lnk { color: var(--l); }
     <a data-s="backup">BACKUP</a>
   </nav>
   <main>
-    <div id="msgs"><div id="msg" class="px">LOADING GR!MM…</div><div id="prog"><i></i></div></div>
+    <div id="msgs"><div id="msg" class="px">LOADING DAKHMEH…</div><div id="prog"><i></i></div></div>
 
     <section id="s-connect">
       <h2>CONNECT</h2>
@@ -121,9 +136,9 @@ a.lnk { color: var(--l); }
         <button id="b-try">TRY WITHOUT AN FM-1</button>
         <button id="b-disconnect">DISCONNECT</button>
       </div>
-      <p class="note">Connect the FM-1 with a USB data cable, switch it on with GR!MM, close other apps that use its MIDI
+      <p class="note">Connect the FM-1 with a USB data cable, switch it on with DAKHMEH, close other apps that use its MIDI
         port, then click CONNECT and allow MIDI (SysEx) when the browser asks. Chrome or Edge on a computer.
-        TRY WITHOUT AN FM-1 runs GR!MM's own code in this page instead: everything works, nothing is kept.</p>
+        TRY WITHOUT AN FM-1 runs DAKHMEH's own code in this page instead: everything works, nothing is kept.</p>
       <p class="note">The FM-1 only accepts writes while it is stopped and silent: stop the sequencer and let every
         note, release and DELAY or SPACE tail end. Nothing is ever written without you clicking a button.</p>
       <table class="kv" id="info"></table>
@@ -149,7 +164,7 @@ a.lnk { color: var(--l); }
           <button id="b-clear">CLEAR</button>
           <button id="b-import">IMPORT</button>
           <button id="b-send" class="go">SEND TO FM-1</button>
-          <input type="file" id="f-import" accept=".json,.grimmsound" hidden>
+          <input type="file" id="f-import" accept=".json,.dakhmehsound,.grimmsound" hidden>
         </div>
       </div>
       <p class="note">Click a sound, then LOAD TO a track (or double-click: the track in the editor): it plays there at once,
@@ -171,19 +186,19 @@ a.lnk { color: var(--l); }
         <button id="b-eexport">EXPORT</button>
         <button id="b-eimport">IMPORT</button>
         <button id="b-revert">REVERT</button>
-        <input type="file" id="f-eimport" accept=".json,.grimmsound" hidden>
+        <input type="file" id="f-eimport" accept=".json,.dakhmehsound,.grimmsound" hidden>
       </div>
       <div class="grp play">
         <canvas id="screen" width="240" height="240"></canvas>
         <div class="keys">
-          <h3>PLAY: GR!MM IN THIS PAGE, THE SELECTED TRACK</h3>
+          <h3>PLAY: DAKHMEH IN THIS PAGE, THE SELECTED TRACK</h3>
           <div class="kbd" id="kbd"></div>
           <div class="row">
             <button id="b-panic">ALL NOTES OFF</button>
             <span class="px">KEYS: Z X C V B N M , . / · S D F H J L ; ' · Q .. O (HIGHER)</span>
           </div>
           <p class="note">Every move of a control reaches the track at once: on the FM-1 (live, as its knobs; nothing is
-            saved until STORE IN SLOT) and in GR!MM here, whose screen this is and whose keys these are. Turn a knob on
+            saved until STORE IN SLOT) and in DAKHMEH here, whose screen this is and whose keys these are. Turn a knob on
             the FM-1 and this page follows. A latched note stays until its key again, or ALL NOTES OFF. The TRACK
             filter (HOME's CUTOFF, RESONANCE, FX) belongs to the track, not to a sound.</p>
         </div>
@@ -199,8 +214,7 @@ a.lnk { color: var(--l); }
       <p class="note">Any WAV (8 to 32 bit, float, mono or stereo, any rate) becomes mono, 22050 Hz, IMA ADPCM, as
         tools/fm1_sample_upload.py makes it; a slot holds 6.64 s (longer: cut, with a short fade). The root note is C4
         unless the file name has one ("drone_A2.wav"). A name is 8 characters (the slot's, what the FM-1 shows): a longer
-        one keeps its number ("Sample-002": SAMP-002). RESTORE FACTORY SAMPLES writes GR!MM's four (URCHIN, LEAVE,
-        NIKOLAI, M-SOFT) over all four slots; an FM-1 also gets them by itself at power-on in a slot that holds
+        one keeps its number ("Sample-002": SAMP-002). RESTORE FACTORY SAMPLES writes DAKHMEH's oud, qanun, ney-air and tar banks over all four slots; an FM-1 also gets them by itself at power-on in a slot that holds
         nothing.</p>
     </section>
 
@@ -217,10 +231,10 @@ a.lnk { color: var(--l); }
         their WAV files.</p>
     </section>
     <footer class="note">
-      <p><b><a class="lnk" href="index.html">Try the GR!MM demo</a></b>: the FM-1's panel in your browser, the same firmware.</p>
-      <p>GR!MM · <a class="lnk" href="LICENSE">GPL-3.0-only</a> · <a class="lnk" href="https://github.com/GRiMMBIENT/grimm">source</a> · <a class="lnk" href="https://github.com/GRiMMBIENT/grimm/blob/main/LICENSING.md">credits and licences</a> (<a class="lnk" href="LICENSING.md">as text</a>) · fonts: Press Start 2P, <a class="lnk" href="LICENSES/OFL-PressStart2P.txt">SIL OFL 1.1</a>; Terminus, <a class="lnk" href="Terminus-LICENSE.txt">SIL OFL 1.1</a> · factory samples: <a class="lnk" href="LICENSES/CC0-1.0.txt">CC0 1.0</a> · built with Emscripten (<a class="lnk" href="LICENSES/MIT-Emscripten.txt">MIT</a>, musl <a class="lnk" href="LICENSES/MIT-musl.txt">MIT</a>)</p>
+      <p><b><a class="lnk" href="index.html">Try the DAKHMEH demo</a></b>: the FM-1's panel in your browser, the same firmware.</p>
+      <p>DAKHMEH · <a class="lnk" href="LICENSE">GPL-3.0-only</a> · <a class="lnk" href="https://github.com/jrdntnnr/DAKHMEH-FM-1">source</a> · <a class="lnk" href="https://github.com/jrdntnnr/DAKHMEH-FM-1/blob/main/LICENSING.md">credits and licences</a> (<a class="lnk" href="LICENSING.md">as text</a>) · fonts: Press Start 2P, <a class="lnk" href="LICENSES/OFL-PressStart2P.txt">SIL OFL 1.1</a>; Terminus, <a class="lnk" href="Terminus-LICENSE.txt">SIL OFL 1.1</a> · factory samples: CC0 oud/qanun/ney; <a class="lnk" href="desert-credits.md">CC BY tar — credits</a> · built with Emscripten (<a class="lnk" href="LICENSES/MIT-Emscripten.txt">MIT</a>, musl <a class="lnk" href="LICENSES/MIT-musl.txt">MIT</a>)</p>
       <p>Built on Dinghy (zvenson), Felucca (Leo Kuroshita, Hügelton Instruments) and SLOOP (isod89); the editor's
-        sections and live editing follow SLOOP's editor. M-VAVE and FM-1 are trademarks of their owners; GR!MM is not
+        sections and live editing follow SLOOP's editor. M-VAVE and FM-1 are trademarks of their owners; DAKHMEH is not
         affiliated with or endorsed by them.</p>
     </footer>
   </main>

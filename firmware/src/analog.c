@@ -11,8 +11,8 @@
 
 #define NSAW 7u                                 /* SUPERSAW's saws */
 #define VOICE_LV 8000                           /* a voice's peak (Q15) */
-enum { WAVE_SAW, WAVE_SQR, WAVE_SUPER, NWAVE };
-static const char *const WAVE_NAME[NWAVE] = {"SAW", "SQUARE", "SUPERSAW"};
+enum { WAVE_SAW, WAVE_SQR, WAVE_SUPER, WAVE_MIJWIZ, WAVE_ARGHUL, NWAVE };
+static const char *const WAVE_NAME[NWAVE] = {"SAW", "SQUARE", "SUPERSAW", "MIJWIZ", "ARGHUL"};
 _Static_assert(NSAW <= VPH, "VA: SUPERSAW's phases in a voice");
 
 static void va_begin(voice_t *v)                /* a note from silence (Felucca analog_note_on) */
@@ -36,7 +36,7 @@ static void va_block(voice_t *v, const volatile int32_t *p, int32_t *mono, int32
     int32_t wave = p[0], det = p[1], p16 = VP16(v), i;
     int32_t cut = (p[2] << 8) + ((64 * (p16 - 60 * 16)) >> 4);   /* KTR 64 */
     int32_t ic1 = v->s[0], ic2 = v->s[1], damp = amp1 - amp0;
-    uint32_t inc1 = vinc(p16);
+    uint32_t inc1 = voice_inc(v, p16);
     tsvf_t flt;
     tsvf_coef(&flt, cut, p[3]);
     if (wave == WAVE_SUPER) {
@@ -63,11 +63,15 @@ static void va_block(voice_t *v, const volatile int32_t *p, int32_t *mono, int32
         for (k = 0; k < NSAW; k++)
             v->ph[k] = ph[k];
     } else {
-        uint32_t inc2 = det ? cents_inc(p16, det, tune_f) : inc1;          /* DTN in cents */
+        uint32_t inc2 = det ? cents_inc(p16, det, VFINE(v)) : inc1;          /* DTN in cents */
+        if (wave == WAVE_ARGHUL) { /* second pipe stays on the track's tuned tonic */
+            uint32_t note = 48u + (uint32_t)clamp(trk[v->trk].root,0,11);
+            inc2 = tuning_rate(pitch_inc(tuning_p16(v->trk,note)), tune_f+tuning_fine(v->trk,note));
+        }
         uint32_t ph0 = v->ph[0], ph1 = v->ph[1];
         for (i = 0; i < (int32_t)CTL; i++) {
             int32_t a, b, s, y;
-            if (wave == WAVE_SQR) {
+            if (wave == WAVE_SQR || wave == WAVE_MIJWIZ || wave == WAVE_ARGHUL) {
                 a = osc_pulse(ph0, inc1, 0x80000000u);
                 b = osc_pulse(ph1, inc2, 0x80000000u);
             } else {
@@ -76,6 +80,7 @@ static void va_block(voice_t *v, const volatile int32_t *p, int32_t *mono, int32
             }
             ph0 += inc1;
             ph1 += inc2;
+            if (wave == WAVE_ARGHUL) b /= 3;
             s = mulq15(a, 16255) + mulq15(b, 16512);                    /* MIX 64: m1 = 32767 - 64 * 258, m2 */
             y = soft_knee(tsvf_lp(&flt, s >> 1, &ic1, &ic2), 16000) << 1;
             mono[i] += mulq15(mulq15(y, amp_at(amp0, damp, i)), VOICE_LV);

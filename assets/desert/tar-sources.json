@@ -1,0 +1,46 @@
+[
+  {
+    "id": "tar-C3",
+    "url": "https://remix.berklee.edu/bisa-persian-tar-oneshots-forte/5/",
+    "preview": "https://s3.amazonaws.com/bepress-streaming-outbox-production/article_files/a5/36/d1/a536d15f53865da8fef066cc2a861bf4566be60e0088f0e04ffb23981e910c5e.m3u8",
+    "source_file": "tar-C3.ts",
+    "sha256": "62f96636b20910f2e8b5937487414f542dfc622d321f9343bcb1437e4cd3f9be",
+    "license": "CC BY (version not specified by publisher)",
+    "author": "Berklee Intersectional Soundbox Archive; Erfan Hessampour (performer), Yangyang Hua (engineer), Shuyi Xiong (editor)",
+    "title": "Forte (C3)",
+    "year": 2025
+  },
+  {
+    "id": "tar-C4",
+    "url": "https://remix.berklee.edu/bisa-persian-tar-oneshots-forte/12/",
+    "preview": "https://s3.amazonaws.com/bepress-streaming-outbox-production/article_files/da/75/6e/da756e5c962bc717827c16c90c363d2d53ef33e671e300c81456f5976ab5c24e.m3u8",
+    "source_file": "tar-C4.ts",
+    "sha256": "694c617b9f9ed70ec9d21b747e78e8cb5a208a7357dde26cb9e8dc0ab7857023",
+    "license": "CC BY (version not specified by publisher)",
+    "author": "Berklee Intersectional Soundbox Archive; Erfan Hessampour (performer), Yangyang Hua (engineer), Shuyi Xiong (editor)",
+    "title": "Forte (C4)",
+    "year": 2025
+  },
+  {
+    "id": "tar-Ab4",
+    "url": "https://remix.berklee.edu/bisa-persian-tar-oneshots-forte/2/",
+    "preview": "https://s3.amazonaws.com/bepress-streaming-outbox-production/article_files/d5/6a/c1/d56ac104c2ccfcae380bf063195699f6db9cf1aa0d8656d5f6c52d7b82d274c3.m3u8",
+    "source_file": "tar-Ab4.ts",
+    "sha256": "0d5fdc37a74dfe01257ddd9d14b32bfaa697a8beeeddd1fac4c1fcc992519ffb",
+    "license": "CC BY (version not specified by publisher)",
+    "author": "Berklee Intersectional Soundbox Archive; Erfan Hessampour (performer), Yangyang Hua (engineer), Shuyi Xiong (editor)",
+    "title": "Forte (Ab4)",
+    "year": 2025
+  },
+  {
+    "id": "tar-Db5",
+    "url": "https://remix.berklee.edu/bisa-persian-tar-oneshots-forte/6/",
+    "preview": "https://s3.amazonaws.com/bepress-streaming-outbox-production/article_files/cf/45/a8/cf45a80f586177acb469703dd6d3344e38314cede32d8d7bd1af584c8bd705fb.m3u8",
+    "source_file": "tar-Db5.ts",
+    "sha256": "6c9ab5a3cef500ec04036461edb2249fa9d800ac8b0e718f5aeff380210ca517",
+    "license": "CC BY (version not specified by publisher)",
+    "author": "Berklee Intersectional Soundbox Archive; Erfan Hessampour (performer), Yangyang Hua (engineer), Shuyi Xiong (editor)",
+    "title": "Forte (Db5)",
+    "year": 2025
+  }
+]

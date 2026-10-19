@@ -25,9 +25,9 @@
 static const uint16_t DRW_LV[9] = {0, 2920, 4125, 5827, 8231, 11627, 16423, 23198, 32767};
 
 /* the 16 registrations, one digit per bar: 16' 5 1/3' 8' 4' 2 2/3' 2' 1 3/5' 1 1/3' 1' */
-static const char *const N_DRW_REG[16] = {"FLUTE", "MELLO", "HOLLW", "SMOOT", "3BAR", "BLUES", "GOSPL", "ROCK",
-                                          "TOPS", "CLARI", "REED", "STRNG", "CHAPL", "BRITE", "BASS", "FULL"};
-static const char DRW_REG[16][DRW_NP + 1] = {
+static const char *const N_DRW_REG[17] = {"FLUTE", "MELLO", "HOLLW", "SMOOT", "3BAR", "BLUES", "GOSPL", "ROCK",
+                                          "TOPS", "CLARI", "REED", "STRNG", "CHAPL", "BRITE", "BASS", "FULL", "NEY"};
+static const char DRW_REG[17][DRW_NP + 1] = {
     "008000000", /* FLUTE  one soft flute */
     "008400000", /* MELLO  flute and octave */
     "800800000", /* HOLLW  sub and octave, hollow */
@@ -44,6 +44,7 @@ static const char DRW_REG[16][DRW_NP + 1] = {
     "008888000", /* BRITE  even bars, bright */
     "858000000", /* BASS   for the left hand */
     "888888888", /* FULL   everything */
+    "008420100", /* NEY: additive approximation, no rotary */
 };
 static const char *const N_DRW_PERC[7] = {"OFF", "2ND", "3RD", "2SOFT", "3SOFT", "2SLOW", "3SLOW"};
 
@@ -102,11 +103,11 @@ static drw_vc_t drw_v[NV];
 /* once per block, before the track's voices: bar gains, percussion, click, drive, the rotors (wheel_block) */
 static void drw_track(drw_trk_t *T, const volatile int32_t *p)
 {
-    uint32_t k, perc = (uint32_t)clamp(p[1], 0, 6), rot = DRW_ROT;
+    uint32_t k, perc = (uint32_t)clamp(p[1], 0, 6), rot = p[0] == 16 ? 0 : DRW_ROT;
     int32_t s = 0, lv[DRW_NP];
     uint32_t norm;
     for (k = 0; k < DRW_NP; k++) {
-        lv[k] = perc && k == DRW_NP - 1u ? 0 : DRW_LV[DRW_REG[(uint32_t)clamp(p[0], 0, 15)][k] - '0'];   /* PERC on: the 1' bar off */
+        lv[k] = perc && k == DRW_NP - 1u ? 0 : DRW_LV[DRW_REG[(uint32_t)clamp(p[0], 0, 16)][k] - '0'];   /* PERC on: the 1' bar off */
         s += lv[k];
     }
     /* sum of the gains = 2.4 s / (s + 1.5) (s in units of a full bar): one bar 0.96, three 1.6, all nine 2.06 */
@@ -171,7 +172,7 @@ static void wheel_block(voice_t *v, const volatile int32_t *p, int32_t *mono, in
     drw_trk_t *T = &drw_t[v->trk % NT];
     drw_vc_t *V = &drw_v[v - vc];
     int32_t acc[CTL], perc1, clk0, clk1, damp = amp1 - amp0;
-    uint32_t i, k, inc0 = vinc(VP16(v));
+    uint32_t i, k, inc0 = voice_inc(v, VP16(v));
     if (T->stamp != vblock) {                   /* (the track's first voice this block) */
         T->stamp = vblock;
         drw_track(T, p);
@@ -245,11 +246,11 @@ static void wheel_text(const volatile int32_t *p, uint32_t k, char *s)   /* para
 {
     int32_t v = p[k];
     switch (k) {
-    case 0: put_s(s, N_DRW_REG[clamp(v, 0, 15)]); return;
+    case 0: put_s(s, N_DRW_REG[clamp(v, 0, 16)]); return;
     case 1: put_s(s, N_DRW_PERC[clamp(v, 0, 6)]); return;
     default: put_s(put_u(s, ((uint32_t)clamp(v, 0, 127) * 100u + 63u) / 127u), "%"); return;
     }
 }
 
-static const engine_t WHEEL_ENGINE = {"WHEEL", {"DRAWBARS", "PERC", "CLICK", "DRIVE"}, {15, 6, 127, 127},
+static const engine_t WHEEL_ENGINE = {"WHEEL", {"DRAWBARS", "PERC", "CLICK", "DRIVE"}, {16, 6, 127, 127},
                                       wheel_begin, wheel_block, wheel_text};

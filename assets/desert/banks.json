@@ -1,0 +1,138 @@
+[
+  {
+    "name": "OUD",
+    "slot": 1,
+    "header": "oud.hdr",
+    "data": "oud.bin",
+    "bytes": 54100,
+    "zones": [
+      {
+        "root": 43,
+        "lo": 0,
+        "hi": 44,
+        "frames": 30857
+      },
+      {
+        "root": 45,
+        "lo": 45,
+        "hi": 46,
+        "frames": 44178
+      },
+      {
+        "root": 48,
+        "lo": 47,
+        "hi": 127,
+        "frames": 33164
+      }
+    ],
+    "sha256": "ff1efaadb50a7e116dcc70c05a68696fa6e116c78a8f6196022ac66f6631aa01"
+  },
+  {
+    "name": "QANUN",
+    "slot": 2,
+    "header": "qanun.hdr",
+    "data": "qanun.bin",
+    "bytes": 69405,
+    "zones": [
+      {
+        "root": 53,
+        "lo": 0,
+        "hi": 56,
+        "frames": 23136
+      },
+      {
+        "root": 60,
+        "lo": 57,
+        "hi": 62,
+        "frames": 23017
+      },
+      {
+        "root": 65,
+        "lo": 63,
+        "hi": 67,
+        "frames": 23149
+      },
+      {
+        "root": 69,
+        "lo": 68,
+        "hi": 71,
+        "frames": 23262
+      },
+      {
+        "root": 74,
+        "lo": 72,
+        "hi": 75,
+        "frames": 23099
+      },
+      {
+        "root": 77,
+        "lo": 76,
+        "hi": 127,
+        "frames": 23146
+      }
+    ],
+    "sha256": "c639478cdbaf6f65276b4e5ab7f10f1593126ea8b85b157dbc20d2351d0eb377"
+  },
+  {
+    "name": "NEY AIR",
+    "slot": 3,
+    "header": "ney-air.hdr",
+    "data": "ney-air.bin",
+    "bytes": 22248,
+    "zones": [
+      {
+        "root": 71,
+        "lo": 0,
+        "hi": 71,
+        "frames": 14842
+      },
+      {
+        "root": 72,
+        "lo": 72,
+        "hi": 74,
+        "frames": 15456
+      },
+      {
+        "root": 76,
+        "lo": 75,
+        "hi": 127,
+        "frames": 14198
+      }
+    ],
+    "sha256": "d0a8d931141466c45d13ceb4a1b6e5d59336285284eb3595898f4f2c6d75f7d2"
+  },
+  {
+    "name": "TAR",
+    "slot": 4,
+    "header": "tar.hdr",
+    "data": "tar.bin",
+    "bytes": 73216,
+    "zones": [
+      {
+        "root": 48,
+        "lo": 0,
+        "hi": 54,
+        "frames": 36608
+      },
+      {
+        "root": 60,
+        "lo": 55,
+        "hi": 64,
+        "frames": 36608
+      },
+      {
+        "root": 68,
+        "lo": 65,
+        "hi": 70,
+        "frames": 36608
+      },
+      {
+        "root": 73,
+        "lo": 71,
+        "hi": 127,
+        "frames": 36608
+      }
+    ],
+    "sha256": "846166020978c17f529f91df3a8e6a9bf640d140fdfe030959a34f8974ebd5ae"
+  }
+]

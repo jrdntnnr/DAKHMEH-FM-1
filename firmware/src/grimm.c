@@ -106,7 +106,7 @@
  * Rules of the road (the chip has no FPU and no libgcc): integers only, no float, no 64-bit division.
  * tests/host.c runs this file on a computer (the screen as a PNG, the sound as a WAV), web/fm1_web.c in a browser.
  * What platform.c offers: docs/API.md. The chip's rules: docs/RULES.md. */
-#define APP_NAME "GR!MM"                        /* the app, the rescue and the crash screen say this */
+#define APP_NAME "DAKHMEH"                        /* the app, the rescue and the crash screen say this */
 #include "platform.c"
 #include "dsp.c"
 #include "wear.c"
@@ -318,15 +318,21 @@ static int voice_latched(uint32_t v)
         if (lat_voice[i] == v) return 1;
     return 0;
 }
-static uint32_t free_voice(uint32_t t, uint32_t note)   /* no note on on it: one still sounding this note of this
-                                                         * track, else an idle one, else the quietest release (there is
-                                                         * one: nlat < NV) */
+/* Expensive engines use the low voice indices. General engines prefer high
+ * idle indices, keeping those slots available for PHYS and SAMPLE. Engine
+ * changes reallocate ownership before a new begin; fading old states remain
+ * in their valid original slot until voice_begin. */
+static uint32_t voice_limit(uint32_t e)
 {
-    uint32_t v, best = 0;
+    return e == ENG_PHYS ? PHYS_NV : e == ENG_SAMPLE ? SAMPLE_NV : NV;
+}
+static uint32_t free_voice(uint32_t t, uint32_t note)
+{
+    uint32_t v, best = NV, limit = voice_limit((uint32_t)trk[t].eng);
     int32_t lv = 0x7FFFFFFF;
-    for (v = 0; v < NV; v++)
+    for (v = 0; v < limit; v++)
         if (!voice_latched(v) && !voice_idle(v) && vc[v].note == note && vc[v].trk == t) return v;
-    for (v = 0; v < NV; v++) {
+    for (v = limit; v-- > 0;) {
         if (voice_latched(v)) continue;
         if (voice_idle(v)) return v;
         if (voice_level(v) < lv) { lv = voice_level(v); best = v; }
@@ -365,12 +371,29 @@ static int note_find(uint32_t t, uint32_t id, uint32_t src)   /* the place in th
         if (lat_id[i] == id && lat_trk[i] == t && lat_src[i] == src) return (int)i;
     return -1;
 }
-static uint32_t drop_oldest(void)               /* the oldest note out of the list (its track forgets it): its voice */
+static uint32_t drop_voice(uint32_t at)
 {
-    uint32_t t0 = lat_trk[0], r0 = lat_root[0], i0 = lat_id[0], s0 = lat_src[0], v = lat_voice[0];
-    drop(0);
-    if (s0 == SRC_KEY && note_find(t0, i0, SRC_KEY) < 0) ec_put(0x80, t0, r0);   /* (its chord's last) */
+    uint32_t t0 = lat_trk[at], r0 = lat_root[at], i0 = lat_id[at], s0 = lat_src[at], v = lat_voice[at];
+    drop(at);
+    if (s0 == SRC_KEY && note_find(t0, i0, SRC_KEY) < 0) ec_put(0x80, t0, r0);
     return v;
+}
+static uint32_t drop_oldest(void) { return drop_voice(0); }
+static void latch_note(uint32_t t, uint32_t id, uint32_t root, uint32_t note, uint32_t src)
+{
+    uint32_t v = free_voice(t, note), i;
+    if (v == NV) {
+        for (i = 0; i < nlat; i++)
+            if (lat_voice[i] < voice_limit((uint32_t)trk[t].eng)) break;
+        if (i == nlat) return; /* defensive: every eligible voice must have an owner */
+        v = drop_voice(i);
+    }
+    voice_start(v, t, note);
+    if (mo_seq && src != SRC_KEY && !out_twin(NV, t, note)) ec_put(0x90, t, note | EC_SEQ);
+    lat_note[nlat] = (uint8_t)note, lat_root[nlat] = (uint8_t)root;
+    lat_id[nlat] = (uint8_t)id, lat_trk[nlat] = (uint8_t)t;
+    lat_voice[nlat] = (uint8_t)v, lat_src[nlat] = (uint8_t)src;
+    nlat++;
 }
 static void note_off(uint32_t t, uint32_t id, uint32_t src, int echo)   /* origin id's voices released (its chord) */
 {
@@ -387,40 +410,17 @@ static void note_on(uint32_t t, uint32_t id, uint32_t note, uint32_t src, int ec
                                                  * alone; a chord step's byte: that chord); sounding already: its own
                                                  * voices start over on it */
 {
-    uint8_t ns[CH_MAX], own[CH_MAX];
-    uint32_t v, i, n, no = 0;
-    int j;
-    if (note > 127u || t >= NT || (trk_quiet >> t & 1u)) return;   /* (a silent track: none) */
-    while ((j = note_find(t, id, src)) >= 0) {  /* (struck again: its voices out of the list, to be used again) */
-        if (echo && no == 0u) ec_put(0x80, t, lat_root[j]);
-        if (no < CH_MAX) own[no++] = lat_voice[j];
-        else voice_release(lat_voice[j]);
-        drop((uint32_t)j);
-    }
+    uint8_t ns[CH_MAX];
+    uint32_t i, n;
+    if (note > 127u || t >= NT || (trk_quiet >> t & 1u)) return;
+    note_off(t, id, src, echo);
     ns[0] = (uint8_t)note, n = 1;
     if (ch < 0 && trk[t].chord) n = chord_notes(t, note, ns);
-    else if (ch > 0) n = chord_notes_tv(ch & 15, ch >> 4 & 7, note, ns);
-    for (i = 0; i < n; i++) {
-        if (i < no)                             /* its own voice again */
-            v = own[i];
-        else if (nlat == NV)                    /* all voices on: the oldest note goes, its voice fades and takes
-                                                 * the new one */
-            v = drop_oldest();
-        else
-            v = free_voice(t, ns[i]);
-        voice_start(v, t, ns[i]);
-        if (mo_seq && src != SRC_KEY && !out_twin(NV, t, ns[i])) ec_put(0x90, t, ns[i] | EC_SEQ);
-        lat_note[nlat] = ns[i];
-        lat_root[nlat] = (uint8_t)note;
-        lat_id[nlat] = (uint8_t)id;
-        lat_trk[nlat] = (uint8_t)t;
-        lat_voice[nlat] = (uint8_t)v;
-        lat_src[nlat] = (uint8_t)src;
-        nlat = nlat + 1u;
-    }
-    for (; i < no; i++) voice_release(own[i]);  /* (a smaller chord now: the rest let go) */
+    else if (ch > 0) n = chord_notes_tv(t, ch & 15, ch >> 4 & 7, note, ns);
+    for (i = 0; i < n; i++) latch_note(t, id, note, ns[i], src);
     if (echo && n) ec_put(0x90, t, note);
 }
+
 static uint32_t tracks_latched(void)            /* bit t: track t has notes on */
 {
     uint32_t i, m = 0;
@@ -466,12 +466,21 @@ static void release_keys(uint32_t t)            /* audio: LATCH ON -> OFF: the t
     for (i = nlat; i-- > 0;)                    /* (a chord: all its notes go at once) */
         if (i < nlat && lat_trk[i] == t && lat_src[i] == SRC_KEY) note_off(t, lat_id[i], SRC_KEY, 1);
 }
-static void restart_track(uint32_t t)           /* audio: a new source: the track's notes go over (a fade, a new attack) */
+static void restart_track(uint32_t t)
 {
-    uint32_t i;
-    for (i = 0; i < nlat; i++)
-        if (lat_trk[i] == t) voice_start(lat_voice[i], t, lat_note[i]);
+    uint8_t saved[NV][4];
+    uint32_t i, n = 0;
+    for (i = 0; i < nlat;) {
+        if (lat_trk[i] != t) { i++; continue; }
+        saved[n][0] = lat_id[i], saved[n][1] = lat_root[i];
+        saved[n][2] = lat_note[i], saved[n][3] = lat_src[i];
+        n++;
+        voice_release(lat_voice[i]);
+        drop(i);
+    }
+    for (i = 0; i < n; i++) latch_note(t, saved[i][0], saved[i][1], saved[i][2], saved[i][3]);
 }
+
 
 #include "arp.c"                                /* the arpeggiator (its notes: note_on, note_off, SRC_ARP) */
 
@@ -632,12 +641,14 @@ static char *put_ms(char *s, uint32_t q16)      /* a time, ms in Q16: "5 ms", "1
  * tap opens its first page, again the next (round); SYSTEM is HOME's, held */
 enum { PG_SOUND, PG_SOURCE, PG_ENV, PG_LFO, PG_SCALE, PG_CHORD, PG_SONG, PG_HOME, PG_MIX1, PG_MIX2, PG_SYSTEM,
        PG_SYS2, PG_SOUNDS, PG_PROJECTS, PG_ARP, PG_GRID, PG_PATTERN, PG_TAPE, PG_GRAIN, PG_DELAY, PG_SPACE, PG_PERFORM,
-       PG_TRACK, PG_FMALGO, PG_FMOP, NPAGE };   /* (the newer last: MIDI LEARN's links keep the pages' numbers they
+       PG_TRACK, PG_FMALGO, PG_FMOP, PG_TUNE1, PG_TUNE2, PG_TUNE3, PG_TUNING, PG_TASH1, PG_TASH2, PG_TASH3, NPAGE };   /* (the newer last: MIDI LEARN's links keep the pages' numbers they
                                                  * have; in their button's round by pg_key. TRACK: gone in step 25, its
                                                  * number kept: sys_load moves its links onto HOME) */
 typedef struct {
     const char *name;
-    uint8_t btn, built, own, cyc;               /* its button (BTN_); built; the track's own (the header names it); in
+    uint8_t btn, built;
+    const volatile uint8_t own;                 /* prevent pi32v2 folding 32 page flags into a ROM-range literal */
+    uint8_t cyc;               /* its button (BTN_); built; the track's own (the header names it); in
                                                  * the button's round */
     const char *knob[4];
 } page_t;
@@ -646,8 +657,8 @@ static const page_t PAGES[NPAGE] = {
     {"SOURCE", BTN_EDIT, 1, 1, 1, {"SOURCE", "LATCH", "", ""}},
     {"ENV", BTN_ENV, 1, 1, 1, {"ATTACK", "DECAY", "SUSTAIN", "RELEASE"}},
     {"LFO", BTN_LFO, 1, 1, 1, {"RATE", "DEPTH", "DESTINATION", "SHAPE"}},
-    {"SCALE", BTN_SEL, 1, 0, 1, {"ROOT", "SCALE", "", ""}},
-    {"CHORD", BTN_SEL, 1, 0, 1, {"CHORD TYPE", "VOICING", "", ""}},
+    {"MAQAM", BTN_SEL, 1, 1, 1, {"ROOT", "SCALE", "MAP", "TEMP"}},
+    {"CHORD", BTN_SEL, 1, 1, 1, {"CHORD TYPE", "VOICING", "", ""}},
     {"SONG", BTN_GLO, 1, 0, 1, {"SECTION", "PATTERN", "REPEATS", "MODE"}},
     {"HOME", BTN_HOME, 1, 1, 1, {"VOLUME", "CUTOFF", "RESONANCE", "FX"}},   /* (the track's: its LEVEL, its filter, its
                                                  * sends together; its sound's name in the header) */
@@ -669,6 +680,13 @@ static const page_t PAGES[NPAGE] = {
     {"TRACK", BTN_HOME, 0, 1, 0, {"", "", "", ""}},   /* (gone: its knobs on HOME) */
     {"FM ALGO", BTN_EDIT, 1, 1, 1, {"ALGO", "FEEDBACK", "OP", "FINE"}},   /* (an FM track's: its own patch, fm.c) */
     {"FM OP", BTN_EDIT, 1, 1, 1, {"RATIO", "LEVEL", "ATTACK", "DECAY"}},  /* (the operator OP selects) */
+    {"TUNE 1", BTN_SEL, 1, 1, 1, {"1", "b2", "2", "b3"}},
+    {"TUNE 2", BTN_SEL, 1, 1, 1, {"3", "4", "b5", "5"}},
+    {"TUNE 3", BTN_SEL, 1, 1, 1, {"b6", "6", "b7", "7"}},
+    {"TUNING", BTN_SEL, 1, 1, 1, {"MODE", "TABLE", "RETUNE", ""}},
+    {"TASHRIQ 1", BTN_SEL, 1, 1, 1, {"C", "C#", "D", "D#"}},
+    {"TASHRIQ 2", BTN_SEL, 1, 1, 1, {"E", "F", "F#", "G"}},
+    {"TASHRIQ 3", BTN_SEL, 1, 1, 1, {"G#", "A", "A#", "B"}},
 };
 static uint32_t pg_key(uint32_t p)              /* its place in its button's round */
 {
@@ -716,7 +734,10 @@ static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 
                          k == 2u ? &song_rep[clamp(song_sect, 0, SONG_N - 1)] : &song_mode;
     case PG_LFO: return k == 0u ? &trk[sel].lfo_rate : k == 1u ? &trk[sel].lfo_depth : k == 2u ? &trk[sel].lfo_dest :
                         &trk[sel].lfo_shape;
-    case PG_SCALE: return k == 0u ? &sc_root : k == 1u ? &sc_scale : 0;
+    case PG_TUNING: return k == 0 ? &trk[sel].tuning_mode : k == 1 ? &trk[sel].tuning_system : k == 2 ? &trk[sel].retune : 0;
+    case PG_TASH1: case PG_TASH2: case PG_TASH3: return &trk[sel].tash_on[(pg - PG_TASH1)*4u+k];
+    case PG_SCALE: return k == 0u ? &trk[sel].root : k == 1u ? &trk[sel].scale : k == 2u ? &trk[sel].map : &trk[sel].temper;
+    case PG_TUNE1: case PG_TUNE2: case PG_TUNE3: return &trk[sel].trim[(pg - PG_TUNE1) * 4u + k];
     case PG_CHORD: return k == 0u ? &trk[sel].ch_type : k == 1u ? &trk[sel].ch_voice : 0;
     case PG_ARP: return k == 0u ? &trk[sel].arp_mode : k == 1u ? &trk[sel].arp_rate : k == 2u ? &trk[sel].arp_oct :
                         &trk[sel].arp_gate;
@@ -746,7 +767,7 @@ static int32_t knob_max(uint32_t pg, uint32_t k)
     return pg == PG_SOUND ? sel_engine()->max[k] : pg == PG_SOURCE ? (k ? 1 : (int32_t)NENG - 1) :
            pg == PG_GRID ? GRID_MAX[k] : pg == PG_PATTERN ? PATT_MAX[k] :
            pg == PG_SOUNDS ? (k == 0u ? SND_N - 1 : k == 1u ? NCAT - 1 : k == 2u ? (int32_t)NENG : 2) :
-           pg == PG_PROJECTS ? 3 : pg == PG_SCALE ? (k ? NSCALE - 1 : 11) : pg == PG_CHORD ? (k ? NVOICING - 1 : NCHORD - 1) :
+           pg == PG_TUNING ? (k == 2 ? 2 : 1) : pg >= PG_TASH1 && pg <= PG_TASH3 ? 1 : pg == PG_PROJECTS ? 3 : pg >= PG_TUNE1 && pg <= PG_TUNE3 ? 63 : pg == PG_SCALE ? (k == 0u ? 11 : k == 1u ? NSCALE - 1 : k == 2u ? NMAP - 1 : 3) : pg == PG_CHORD ? (k ? NVOICING - 1 : NCHORD - 1) :
            pg == PG_ARP ? (k == 0u ? NARPMODE - 1 : k == 1u ? NARPRATE - 1 : k == 2u ? 4 : 100) :
            pg == PG_LFO ? (k == 0u ? 127 : k == 1u ? 100 : k == 2u ? NLFODEST - 1 : NLFOSHAPE - 1) :
            pg == PG_SONG ? (k == 0u ? SONG_N - 1 : k == 1u ? SONG_END : k == 2u ? 16 : NSONGMODE - 1) :
@@ -756,6 +777,7 @@ static int32_t knob_max(uint32_t pg, uint32_t k)
 }
 static int32_t knob_min(uint32_t pg, uint32_t k)   /* (RATCHET, LENGTH, STEPS, OCTAVES: from 1; GATE from 10 %) */
 {
+    if (pg >= PG_TUNE1 && pg <= PG_TUNE3) return -63;
     if (pg == PG_ARP && k >= 2u) return k == 2u ? 1 : 10;
     if (pg == PG_SONG && k == 2u) return 1;     /* (REPEATS from 1) */
     if (pg == PG_SYSTEM && k == 2u) return -50; /* (TUNE: -50 .. +50 cents) */
@@ -811,7 +833,12 @@ static void knob_text(uint32_t pg, uint32_t k, char *s)   /* knob k's value on p
         else if (k == 2u) put_pc(s, v);
         else put_ms(s, 10u * pow2_q16((v * 33) >> 1));
         return;
-    case PG_SCALE: if (k < 2u) put_s(s, k ? SC_NAME[clamp(v, 0, NSCALE - 1)] : SC_NOTE[clamp(v, 0, 11)]); return;
+    case PG_TUNING: put_s(s, k == 0 ? (v ? "TASHRIQ" : "MAQAM") : k == 1 ? (v ? "CUSTOM" : "PRESET") : v == 2 ? "HOLD" : v == 1 ? "GLIDE" : "LIVE"); return;
+    case PG_TASH1: case PG_TASH2: case PG_TASH3: put_s(s, v ? "ON" : "OFF"); return;
+    case PG_SCALE: put_s(s, k == 0u ? SC_NOTE[clamp(v, 0, 11)] : k == 1u ? SC_NAME[clamp(v, 0, NSCALE - 1)] : k == 2u ? MAP_NAME[clamp(v, 0, NMAP - 1)] : TEMP_NAME[clamp(v, 0, 3)]); return;
+    case PG_TUNE1: case PG_TUNE2: case PG_TUNE3:
+        if (v < 0) *s++ = '-'; else if (v > 0) *s++ = '+';
+        put_s(put_u(s, (uint32_t)(v < 0 ? -v : v)), "ct"); return;
     case PG_CHORD: if (k < 2u) put_s(s, k ? VC_NAME[clamp(v, 0, NVOICING - 1)] : CH_SHORT[clamp(v, 0, NCHORD - 1)]); return;
     case PG_SONG:
         if (k == 0u || k == 2u) put_u(s, (uint32_t)v + (k ? 0u : 1u));
@@ -1050,7 +1077,7 @@ static void knob_step(uint32_t pg, uint32_t k, int32_t d)   /* KNOB k + 1 on pag
     if (pg == PG_SOUND && k == 0u && sel_eng() == ENG_FM) undo_take(UK_SND | sel, -1);   /* FM's PATCH: its edits) */
     if (pg == PG_SOURCE && k == 0u) set_source(*p + d);
     else if (pg == PG_SOURCE && k == 1u) set_latch(*p + d);
-    else if (pg == PG_GRID && k == 0u && sc_scale > 0) *p = sc_walk(*p, d);   /* (a SCALE: its notes only) */
+    else if (pg == PG_GRID && k == 0u && trk[sel].scale > 0) *p = sc_walk(sel, *p, d);   /* (a SCALE: its notes only) */
     else if (pg == PG_GRID && k == 0u && !*p && d > 0) *p = 60;   /* NOTE from OFF: C4, then on from there */
     else *p = clamp(*p + d, lo, hi);
     if (pg == PG_SOUNDS && k == 2u) sv_step(0);   /* (a new TYPE: SLOT onto its list) */
@@ -1137,7 +1164,7 @@ static void cc_apply(const uint8_t *L, uint32_t val)   /* a linked CC: its param
         if (pg == PG_GRID && k == 0u) {         /* NOTE: the note (a SCALE: its nearest), 0 OFF */
             seq_step_t *st = &seq[sel].pat[clamp(seq[sel].cur, 0, SEQ_NPAT - 1)].st[clamp(seq[sel].cursor, 0, SEQ_N - 1)];
             undo_take(UK_STEP | sel << 8 | (uint32_t)seq[sel].cursor, -1);
-            *p = v ? (int32_t)sc_snap((uint32_t)v) : 0;
+            *p = v ? (int32_t)sc_snap(sel, (uint32_t)v) : 0;
             if (!*p) st->lmask = 0, st->chord = 0;
         } else
             knob_step(pg, k, v - *p);
@@ -1292,7 +1319,7 @@ static void step_cp(seq_step_t *d, const seq_step_t *s)
 }
 static int32_t tl_note(uint32_t c)              /* a note near c, in the SCALE */
 {
-    return (int32_t)sc_snap((uint32_t)clamp((int32_t)c - 7 + (int32_t)tl_rnd(15), 1, 127));
+    return (int32_t)sc_snap(sel, (uint32_t)clamp((int32_t)c - 7 + (int32_t)tl_rnd(15), 1, 127));
 }
 static void seq_tool(uint32_t w, uint32_t base)
 {
@@ -1345,7 +1372,7 @@ static void seq_tool(uint32_t w, uint32_t base)
         for (m = 2 + (int32_t)tl_rnd(2), j = 0; j < m; j++) {
             seq_step_t *s = &P->st[tl_rnd((uint32_t)n)];
             int32_t dd = (tl_rnd(2) ? 1 : -1) * (1 + (int32_t)tl_rnd(2));
-            if (s->note && tl_rnd(3)) s->note = sc_scale > 0 ? sc_walk(s->note, dd) : clamp(s->note + dd, 1, 127);
+            if (s->note && tl_rnd(3)) s->note = trk[sel].scale > 0 ? sc_walk(sel, s->note, dd) : clamp(s->note + dd, 1, 127);
             else if (s->note) step_off(s);
             else s->note = tl_note(c);
             if (!s->note) step_off(s);
@@ -1627,7 +1654,9 @@ static void app_main(void)
                 b_used |= 1u << BTN_FX;
                 continue;
             }
-            n = sc_snap(base + k);              /* (a SCALE: its nearest note) */
+            int32_t mapped = sc_key(sel, (int32_t)(base + k));
+            if (mapped < 0) continue;
+            n = (uint32_t)mapped;              /* (a SCALE: its nearest note) */
             ch_last = (int32_t)n;
             if (rec && !(playing && trk[sel].arp)) {   /* REC: the note into the track's sequence (stopped: the
                                                  * cursor's step, the cursor on; playing: the nearest step), heard while
@@ -1695,7 +1724,7 @@ static void app_main(void)
             if (set.mch >= MCH_ALL) t = sel;
             else if (c - set.mch < NT) t = c - set.mch;
             else continue;                      /* (not one of the tracks' channels) */
-            n = sc_snap(d1);                    /* (a SCALE: its nearest note) */
+            n = d1;                    /* (a SCALE: its nearest note) */
             if (on && t == sel) ch_last = (int32_t)n;
             for (m = 0; m < NT; m++)            /* LATCH OFF: the voices it started released (a note-on again without
                                                  * its off: those first); ALL > SEL: whichever track it went to */

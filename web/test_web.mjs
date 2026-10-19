@@ -145,9 +145,9 @@ check(saved === null, `settings: ${saved ? `saved at ${saved.ms} ms` : "not save
   const vf = await VirtualFM1.create(readFileSync("web/dist/grimm.wasm"));
   vf.warmUp();
   const cl = new Client(vf), info = await cl.info(), meta = vf.meta();
-  check(info.proto === 2 && info.sounds === 64 && info.slotSize === 2532 && info.setSize === 168 && info.factory === 40,
+  check(info.proto === 3 && info.sounds === 64 && info.slotSize === 2768 && info.setSize === 168 && info.factory === 52,
         `editor: INFO (GR!MM ${info.firmware}, protocol ${info.proto}, ${info.sounds} sounds, slots ${info.slotSize} B)`);
-  check(meta.factory.length === 40 && meta.engines.length === 7 && meta.fmAlg.length === 32, "editor: the page's names and tables from the firmware");
+  check(meta.factory.length === 52 && meta.engines.length === 7 && meta.fmAlg.length === 32, "editor: the page's names and tables from the firmware");
   const f2 = await cl.get(OBJ.FACT + 2, 64);
   check(eq([...f2], meta.factory[2].rec) && recordOk(f2), `editor: factory sound 3 (${meta.factory[2].name}) read as the page has it`);
   const b0 = await makeBackup(cl, info);
@@ -176,7 +176,7 @@ check(saved === null, `settings: ${saved ? `saved at ${saved.ms} ms` : "not save
     dv.setInt16(44 + i * 4, Math.round(v * 20000), true), dv.setInt16(46 + i * 4, Math.round(v * 12000), true);
   }
   const s0 = await cl.smpInfo();                            // (power-on: an erased sample area, the factory's)
-  check(s0.map((x) => `${x.state}${x.name}${x.root}`).join() === "1URCHIN60,1LEAVE60,1NIKOLAI60,1M-SOFT60",
+  check(s0.map((x) => `${x.state}${x.name}${x.root}`).join() === "1OUD43,1QANUN53,1NEY AIR71,1TAR48",
         `editor: the factory samples in the slots that held nothing at power-on (${s0.map((x) => x.name || "-").join(", ")})`);
   const sl = makeSlot(wav.buffer, "TESTWAV", 57), zn = new DataView(sl.hdr.buffer).getUint32(36, true);
   const after = await cl.smpUpload(2, sl.hdr, sl.data);
@@ -206,7 +206,7 @@ check(saved === null, `settings: ${saved ? `saved at ${saved.ms} ms` : "not save
     check(nm === sampleName("Sample-002") && nm === "SAMP-002", `editor: a long sample name cut as the uploader cuts it, its number kept (${nm})`);
   }
   const sf = await cl.smpFactory();
-  check(sf.map((x) => `${x.state}${x.name}`).join() === "1URCHIN,1LEAVE,1NIKOLAI,1M-SOFT", `editor: RESTORE: the four factory samples (${sf.map((x) => x.name).join(", ")})`);
+  check(sf.map((x) => `${x.state}${x.name}`).join() === "1OUD,1QANUN,1NEY AIR,1TAR", `editor: RESTORE: the four factory samples (${sf.map((x) => x.name).join(", ")})`);
   // the tracks, live
   const t0 = await Promise.all([0, 1, 2, 3].map((t) => cl.track(t)));
   check(t0.every((r) => recordOk(r.rec)) && t0.every((r) => r.sel === t0[0].sel), `editor: the four tracks read (track ${t0[0].sel + 1} selected)`);

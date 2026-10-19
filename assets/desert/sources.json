@@ -1,0 +1,47 @@
+[
+  {
+    "id": "oud-g2",
+    "author": "hammondman",
+    "url": "https://freesound.org/people/hammondman/sounds/172682/",
+    "preview": "https://cdn.freesound.org/previews/172/172682_3222989-hq.mp3",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "sha256": "a2665d9aea11ab178b906ff14f51a6b8b296123da334d7ec2e5bcd4b690cb0a1"
+  },
+  {
+    "id": "oud-a2",
+    "author": "hammondman",
+    "url": "https://freesound.org/people/hammondman/sounds/172683/",
+    "preview": "https://cdn.freesound.org/previews/172/172683_3222989-hq.mp3",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "sha256": "e73c93138bf080cefc84c2bb84518f5d6b65a4f882690676ecda752ad088f1da"
+  },
+  {
+    "id": "oud-c3",
+    "author": "hammondman",
+    "url": "https://freesound.org/people/hammondman/sounds/172684/",
+    "preview": "https://cdn.freesound.org/previews/172/172684_3222989-hq.mp3",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "sha256": "f31486b36377b3a54f74373557f34684165dab77fa4a44534176722021f73943"
+  },
+  {
+    "id": "qanun",
+    "author": "barisbozkurt",
+    "url": "https://freesound.org/people/barisbozkurt/sounds/211133/",
+    "preview": "https://cdn.freesound.org/previews/211/211133_2549676-hq.mp3",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "sha256": "d24accff4699a6038077aaadf59b917ff2255d213ca69b0c070e259f3a20fed6"
+  },
+  {
+    "id": "ney",
+    "author": "aliaref",
+    "url": "https://freesound.org/people/aliaref/sounds/580759/",
+    "preview": "https://cdn.freesound.org/previews/580/580759_13091829-hq.mp3",
+    "license": "CC0-1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "sha256": "2ccb66330f4b1e1245c84c72b13254766f9f96362ba0246aa164bceb92b47202"
+  }
+]

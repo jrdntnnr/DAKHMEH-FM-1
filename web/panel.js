@@ -16,7 +16,7 @@ const BLACK = [1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25];
 const BLACK_AFTER = [0, 1, 2, 4, 5, 7, 8, 9, 11, 12, 14];  // the white key each black one follows
 const NOTE = ["F", "F♯", "G", "G♯", "A", "A♯", "B", "C", "C♯", "D", "D♯", "E"];
 const keyName = (k) => NOTE[k % 12] + (3 + Math.floor((k + 5) / 12));
-const STORE = "grimm-web-settings";
+const STORE = "dakhmeh-web-settings";
 
 let node = null, btnMask = 0, keyMask = 0, latched = 0, master = 700;
 const send = (m) => { if (node) node.port.postMessage(m); };
@@ -334,7 +334,7 @@ async function switchOn() {
           if (m.leds) drawLights(m.leds);
           if (m.settings && !saveSettings(m.settings) && !warned) {
             warned = true;
-            console.warn("GR!MM: this browser does not keep the settings; they last until the page closes.");
+            console.warn("DAKHMEH: this browser does not keep the settings; they last until the page closes.");
           }
         }
       };
@@ -344,7 +344,7 @@ async function switchOn() {
     await ac.resume();
     $("start").hidden = true;
     if (ac.sampleRate !== 44100)
-      console.warn(`GR!MM: the browser plays at ${ac.sampleRate} Hz; the pitch is off by ${(1200 * Math.log2(ac.sampleRate / 44100)).toFixed(0)} cents.`);
+      console.warn(`DAKHMEH: the browser plays at ${ac.sampleRate} Hz; the pitch is off by ${(1200 * Math.log2(ac.sampleRate / 44100)).toFixed(0)} cents.`);
     syncButtons();
     syncKeys();
     midiOn();

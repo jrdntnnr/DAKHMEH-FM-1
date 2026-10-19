@@ -32,13 +32,14 @@ typedef struct {
     const uint8_t *wd[SP_NW];                   /* the windows: which slot's data, */
     int32_t ws[SP_NW];                          /* .. which segment (-1: none) */
     int32_t r[2];                               /* heads A and B: their place in their window, Q16 */
+    uint8_t instrument, zone, done;
     uint8_t hw[2], a, st, wnext;                /* .. their windows; which head is A; SP_; the next window to reuse */
     uint32_t ui, uf;                            /* head A in its loop: whole samples, Q16 fraction */
     uint32_t ev, xs, xinv, kq;                  /* the next event (at ui); the crossing: its start, 256 / its length
                                                  * (Q16), how far it is (Q16, 0 .. 256) */
 } sp_voice_t;
-static sp_voice_t sp[NV];
-static int16_t sp_w[NV][SP_NW][SMP_SEG + 1u] __attribute__((section(".pool")));   /* a segment and the next sample */
+static sp_voice_t sp[SAMPLE_NV];
+static int16_t sp_w[SAMPLE_NV][SP_NW][SMP_SEG + 1u] __attribute__((section(".pool")));   /* a segment and the next sample */
 
 static uint32_t sp_slot(const volatile int32_t *p) { return (uint32_t)clamp(p[0], 0, SMP_SLOTS - 1); }
 
@@ -169,7 +170,49 @@ static void sampler_begin(voice_t *v)           /* a note from silence: the loop
     for (k = 0; k < SP_NW; k++)                 /* (a slot's data may have changed since: an upload, in silence) */
         t->ws[k] = -1;
     t->a = 0;
+    t->instrument = t->done = 0;
     t->st = SP_PLAY;
+}
+
+/* v2 banks keep note zones fixed for the duration of a key; pitch still retunes live.
+ * Each zone ends once. The bank builder fades its tail; interpolation never reads
+ * the following zone. START/LENGTH/REVERSE retain their meanings within the zone. */
+static void sampler_instrument(voice_t *v, const volatile int32_t *p, int32_t *mono, int32_t amp0, int32_t amp1)
+{
+    uint32_t vi=(uint32_t)(v-vc), slot=sp_slot(p), i, step;
+    sp_voice_t *t=&sp[vi]; const smp_slot_t *s=&smp[slot]; const uint8_t *z;
+    if(!s->ready || !s->zones || t->done) return;
+    if(!t->instrument) {
+        for(i=0;i<s->nz;i++) { z=s->zones+24*i; if(v->note>=z[18] && v->note<=z[19]) break; }
+        if(i==s->nz) {t->done=1;return;}
+        t->zone=(uint8_t)i;t->instrument=1;t->cur.slot=(uint8_t)slot;
+        z=s->zones+24*i;
+        t->cur.l0=rd32(z)+rd32(z+4)*(uint32_t)clamp(p[1],0,127)/128u;
+        t->cur.len=(rd32(z)+rd32(z+4)-t->cur.l0)*(uint32_t)(clamp(p[2],0,127)+1)/128u;
+        if(t->cur.len<2u){t->done=1;return;}
+        t->cur.rev=p[3]!=0;t->ui=t->uf=0;
+    }
+    if(t->cur.slot!=slot) return; /* a held note never jumps to another instrument */
+    z=s->zones+24*t->zone;
+    step=tuning_rate(pow2_q16(clamp(VP16(v)-(int16_t)rd16(z+16),-2304,768))>>1,VFINE(v));
+    if(step<64u)step=64u;
+    for(i=0;i<(uint32_t)CTL;i++) {
+        uint32_t pos, next, w, wn, j; int32_t a,b,y;
+        if(t->ui>=t->cur.len-1u){t->done=1;break;}
+        pos=t->cur.l0+(t->cur.rev?t->cur.len-1u-t->ui:t->ui);
+        next=t->cur.rev?pos-1u:pos+1u;
+        w=sp_win(t,vi,slot,(int32_t)(pos>>SMP_SEG_LOG2),SP_NW);
+        a=sp_w[vi][w][pos&(SMP_SEG-1u)];
+        wn=sp_win(t,vi,slot,(int32_t)(next>>SMP_SEG_LOG2),w);
+        b=sp_w[vi][wn][next&(SMP_SEG-1u)];
+        y=a+((b-a)*(int32_t)(t->uf>>1)>>15);
+        /* Endpoint fade also makes shortened/reversed zones safe. */
+        j=t->cur.len-1u-t->ui;
+        if(t->ui<64u)y=y*(int32_t)t->ui/64;
+        if(j<128u)y=y*(int32_t)j/128;
+        mono[i]+=mulq15(y,mulq15(amp_at(amp0,amp1-amp0,(int32_t)i),SP_LV));
+        t->uf+=step;t->ui+=t->uf>>16;t->uf&=65535u;
+    }
 }
 
 /* CTL frames of voice v, added to mono[] */
@@ -179,6 +222,7 @@ static void sampler_block(voice_t *v, const volatile int32_t *p, int32_t *mono, 
     sp_voice_t *t = &sp[vi];
     int32_t buf[CTL], d16, a0, da, ra, rb, dsa, dsb;
     const int16_t *wa, *wb;
+    if(smp[sp_slot(p)].zones) { sampler_instrument(v,p,mono,amp0,amp1); return; }
     if (!t->cur.ok) {                           /* (the first block, or the slot was empty: is it there now?) */
         if (!sp_loop(p, &t->cur))
             return;                             /* an empty slot: nothing at all */
@@ -193,8 +237,12 @@ static void sampler_block(voice_t *v, const volatile int32_t *p, int32_t *mono, 
     }
     /* the speed: the key against the root (varispeed) */
     d16 = VP16(v) - smp[t->cur.slot].root16;
-    step = (pow2_q16(clamp(d16, -2304, 384)) >> 8) * (SMP_RATE_Q16 >> 8);
-    step += (uint32_t)((int32_t)(step >> 12) * tune_f);   /* (TUNE) */
+    if (tuning_precise(v->trk))
+        step = tuning_rate(pow2_q16(clamp(d16, -2304, 384)) >> 1, VFINE(v));
+    else {
+        step = (pow2_q16(clamp(d16, -2304, 384)) >> 8) * (SMP_RATE_Q16 >> 8);
+        step += (uint32_t)((int32_t)(step >> 12) * tune_f);
+    }   /* (TUNE) */
     step = step > SP_STEP_MAX ? SP_STEP_MAX : step < 256u ? 256u : step;
 
     /* the heads: A, and B as they cross; their places move by the step, backward in a REVERSE loop */

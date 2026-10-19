@@ -21,7 +21,9 @@
 #define CTL 32                                  /* frames a control step: Felucca's CTL, signed as Felucca's (fm6_core.c
                                                  * divides signed gain steps by it: unsigned, a falling gain wraps) */
 #define CTL_LOG2 5
-#define NV 6u                                   /* voices, shared by the tracks */
+#define NV 12u                                   /* voices, shared by the tracks */
+#define PHYS_NV 3u                              /* shared expensive physical-model voices */
+#define SAMPLE_NV 6u                            /* shared ADPCM decode caches */
 #define NT 4u                                   /* tracks */
 #define NPARAM 4u                               /* an engine's parameters: KNOB 1..4 on the SOUND page */
 #define VPH 8u                                  /* a voice's phases for its engine (SUPERSAW: 7) */
@@ -37,6 +39,7 @@ typedef struct {
     volatile uint8_t stage, trk, note, eng;     /* audio: ST_*, the track, the note and the engine it plays */
     volatile int32_t env;                       /* audio: Q24 */
     uint32_t seen;                              /* audio: the req it acted on */
+    int32_t tuning_now, tuning_start;          /* audio: decicents, for glide / hold */
     int32_t amp, rng;                           /* the block's end amplitude (Q15); a random state for the engine */
     uint32_t ph[VPH];                           /* the engine's phases */
     int32_t s[4];                               /* .. and its other state (VA: the filter) */
@@ -67,9 +70,11 @@ typedef struct {
     volatile int32_t fm_alg, fm_fb, fmo[6][5];  /* FM: the track's own patch (FM ALGO, FM OP): ALGO 0..31, FEEDBACK
                                                  * 0..7; an operator's (OP1 first) RATIO 0..31, FINE, LEVEL, ATTACK,
                                                  * DECAY 0..99 (fm.c; a built-in PATCH's: fm_builtin) */
+    volatile int32_t root, scale, map, temper, trim[12], custom;
+    volatile int32_t tuning_mode, tuning_system, retune, table[12], tash_on[12], tash_cents[12];
 } track_t;
 #define TRK_DEF {ENG_VA, {{0, 10, 90, 30}, {0, 64, 64, 20}, {0, 0, 127, 0}, {0, 12, 64, 10}, {4, 0, 40, 0}, {0, 64, 80, 64}, {0, 0, 60, 0}}, 100, 0, 100, 0, 64, 0, \
-                 {22, 85, 127, 89}, 0, 0, 0, 0, 0, 4, 1, 50, 64, 0, 0, 0, 127, 0, 100, 0, 0, {{0}}}
+                 {22, 85, 127, 89}, 0, 0, 0, 0, 0, 4, 1, 50, 64, 0, 0, 0, 127, 0, 100, 0, 0, {{0}}, 0, 0, 0, 0, {0}, 0, 0, 0, 0, {0}, {0}, {-50,-50,-50,-50,-50,-50,-50,-50,-50,-50,-50,-50}}
 static track_t trk[NT] = {TRK_DEF, TRK_DEF, TRK_DEF, TRK_DEF};   /* VA: SAW, DETUNE 10, CUTOFF 90, RESONANCE 30
                                                  * (Felucca's ANALOG); FM: BELL as made, DETUNE 20; SAMPLE: slot 1,
                                                  * the whole sample, forward; VOICE: A, SHIFT 0, BUZZ 64, BREATH 10
@@ -111,7 +116,9 @@ static inline int32_t amp_at(int32_t amp0, int32_t damp, int32_t i)
 /* the LFO's (lfo.c, the audio ISR a control step): a track's pitch offset (1/16 semitones: VP16, a voice's pitch, every
  * engine's), and a voice's parameters, one of them moved (else the track's own) */
 static volatile int32_t lfo_p16[NT];
-#define VP16(v) ((int32_t)(v)->note * 16 + lfo_p16[(v)->trk % NT])
+#include "tuning.c"
+#define VP16(v) ((int32_t)(v)->note * 16 + voice_tuning_dc(v) * 16 / 1000 + lfo_p16[(v)->trk % NT])
+#define VFINE(v) (tune_f + tuning_fine_dc(voice_tuning_dc(v)))
 static const volatile int32_t *lfo_params(uint32_t v, uint32_t t, uint32_t e);
 /* SYSTEM's TUNE (main loop): every source's pitch times 1 + tune_f / 4096 (-50 .. +50 cents: -117 .. +120; finer than
  * VP16's 6.25-cent steps); vinc: a pitch's phase increment, tuned */
@@ -120,6 +127,12 @@ static inline uint32_t vinc(int32_t p16)
 {
     uint32_t inc = pitch_inc((uint32_t)clamp(p16, 0, 2047));
     return inc + (uint32_t)((int32_t)(inc >> 12) * tune_f);
+}
+
+static inline uint32_t voice_inc(const voice_t *v, int32_t p16)
+{
+    uint32_t inc = pitch_inc((uint32_t)clamp(p16, 0, 2047));
+    return tuning_rate(inc, VFINE(v));
 }
 
 #include "analog.c"                             /* the engines */
@@ -161,6 +174,7 @@ static void voice_begin(voice_t *v)             /* a note from silence */
     if (!v->rng)
         v->rng = 1234567 + (int32_t)(v - vc);
     v->eng = (uint8_t)(trk[v->trk].eng >= 0 && trk[v->trk].eng < NENG ? trk[v->trk].eng : 0);
+    v->tuning_now = v->tuning_start = tuning_dc(v->trk, v->note);
     ENGINES[v->eng]->begin(v);
     v->env = 0;
     v->stage = ST_ATK;
@@ -202,6 +216,8 @@ static int32_t env_tick(voice_t *v)
             voice_begin(v);
             e = 0;
         } else if (v->want_note == v->note && v->want_trk == v->trk && v->eng == trk[v->trk].eng && v->stage != ST_FADE) {
+            v->tuning_now = v->tuning_start = tuning_dc(v->trk, v->note);
+            if(v->eng == ENG_SAMPLE && smp[sp_slot(trk[v->trk].p[ENG_SAMPLE])].zones) sampler_begin(v);
             v->stage = ST_ATK;                  /* the same note again (same engine): on up from where it is */
         } else {
             v->stage = ST_FADE;                 /* another note: out first, then begin */
@@ -279,6 +295,7 @@ static uint32_t voices_render(int32_t (*tb)[VB], uint32_t n)
                 for (i = 0; i < n; i++)
                     tb[t][i] = 0;
             }
+            voice_tuning_tick(v);
             ENGINES[v->eng]->block(v, lfo_params(k, t, v->eng), tb[t] + b, amp0, amp1);   /* (the engine it began
                                                  * with; the LFO's on one of its knobs) */
         }

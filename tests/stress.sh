@@ -11,10 +11,12 @@ set -e
 cd "$(dirname "$0")/.."
 mkdir -p build/stress
 python3 tests/device_names.py || { echo "stress test: FAILED (device names)"; exit 1; }
-cc -O1 -g -fsanitize=address,undefined -fno-sanitize=shift -fno-sanitize-recover=undefined -fno-omit-frame-pointer \
+stress_seed="${1:-1}"
+case "$(uname -s)" in Darwin) set -- '-Dsection(x)=unused';; *) set --;; esac
+cc "$@" -O1 -g -fsanitize=address,undefined -fno-sanitize=shift -fno-sanitize-recover=undefined -fno-omit-frame-pointer \
    -Wall -Wno-unused-function -DDINGHY_HOST -DGRIMM_STRESS -DHOST_MATRIX -DAPP_VER="\"stress\"" -Ifirmware/src -Ifirmware/gen \
    -o build/stress/grimm firmware/src/grimm.c
-python3 tests/stress_gen.py "${1:-1}" build/stress/script.txt build/stress/checks.txt
+python3 tests/stress_gen.py "$stress_seed" build/stress/script.txt build/stress/checks.txt
 set +e
 UBSAN_OPTIONS=print_stacktrace=1 STRESS_CHECKS=build/stress/checks.txt build/stress/grimm build/stress/out build/stress/script.txt \
     > build/stress/log.txt 2>&1

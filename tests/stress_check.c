@@ -102,7 +102,7 @@ static const uint8_t *st_seq5(uint8_t *o, const uint8_t *n)   /* a sequence (260
 static void st_trk5(uint8_t *q)                 /* (a track as before TRACK: its bytes 29..31 zero) */
 {
     uint32_t t;
-    for (t = 0; t < NT; t++) q[t * TRK_PK + 29u] = q[t * TRK_PK + 30u] = q[t * TRK_PK + 31u] = 0;
+    for (t = 0; t < NT; t++) q[t * 52u + 29u] = q[t * 52u + 30u] = q[t * 52u + 31u] = 0;
 }
 static void st_work5(uint8_t *o)                /* the working project now, as version 5 (before TRACK too) */
 {
@@ -110,8 +110,10 @@ static void st_work5(uint8_t *o)                /* the working project now, as v
     const uint8_t *q = n;
     uint32_t k, t;
     pk_work(n);
-    st_trk5(n);
-    for (k = 0; k < NT * TRK_PK + 20u; k++) *o++ = *q++;
+    uint8_t *start = o;
+    for (t = 0; t < NT; t++, q += TRK_PK) { memcpy(o, q, 52u); o += 52u; }
+    st_trk5(start);
+    for (k = 0; k < 20u; k++) *o++ = *q++;
     for (t = 0; t < NT; t++, o += SEQ_PK5) q = st_seq5(o, q);
     q += NT * LOCK_PK;
     for (k = 0; k < SONG_PK; k++) *o++ = *q++;
@@ -121,8 +123,10 @@ static void st_slots5(uint8_t *o)               /* the slots now, as version 5 *
     uint32_t s, k, t;
     for (s = 0; s < 4u; s++) {
         const uint8_t *q = slots[s];
-        for (k = 0; k < 4u + NT * TRK_PK; k++) *o++ = *q++;
-        st_trk5(o - NT * TRK_PK);
+        for (k = 0; k < 4u; k++) *o++ = *q++;
+        uint8_t *start = o;
+        for (t = 0; t < NT; t++, q += TRK_PK) { memcpy(o, q, 52u); o += 52u; }
+        st_trk5(start);
         for (t = 0; t < NT; t++, o += SEQ_PK5) q = st_seq5(o, q);
     }
 }
@@ -194,7 +198,7 @@ static void stress_factory(void)                /* "factory" */
     uint8_t lf[4];
     for (i = 0; i < SND_NFACT; i++) {           /* (each a sound a track can take, named to fit) */
         const uint8_t *q = SND_FACTORY[i];
-        if (q[1] >= NCAT || q[3] >= NENG || q[3] == ENG_SAMPLE || !SND_FNAME[i][0] || strlen(SND_FNAME[i]) > 16u)
+        if (q[1] >= NCAT || q[3] >= NENG || !SND_FNAME[i][0] || strlen(SND_FNAME[i]) > 16u)
             stress_fail("factory: a factory sound not as it should be (number)", i);
     }
     for (c = 0; c < NCAT; c++) {                /* (a CATEGORY's list: its factory sounds first, in order) */
@@ -204,8 +208,8 @@ static void stress_factory(void)                /* "factory" */
         n += cat_len(c);
     }
     for (i = 0; i < SND_N; i++) u += snd_rec(i) != 0;
-    if (SND_NFACT != 40u || !u || n != SND_NFACT + u)
-        stress_fail("factory: PRESETS' lists not the 40 factory sounds and the user's (sounds listed)", n);
+    if (SND_NFACT != 52u || !u || n != SND_NFACT + u)
+        stress_fail("factory: PRESETS' lists not the 52 factory sounds and the user's (sounds listed)", n);
     if (!(r = cat_item((uint32_t)brw_cat[sel] % NCAT, (uint32_t)brw_pos[sel])))
         stress_fail("factory: PRESETS browsed to nothing (place)", (uint32_t)brw_pos[sel]);
     e = r[3];
@@ -435,7 +439,7 @@ static void stress_fsamples(void)               /* x_editor: power-on's factory 
         stress_fail("x_editor: RESTORE did not write all four", st_sxn);
     for (k = 0; k < SMP_SLOTS; k++)
         while (smp[k].state == SS_SCAN) smp_scan(k);
-    if (!smp[0].ready || strcmp(smp[0].name, "URCHIN") || !smp[3].ready || strcmp(smp[3].name, "M-SOFT"))
+    if (!smp[0].ready || strcmp(smp[0].name, "OUD") || !smp[3].ready || strcmp(smp[3].name, "TAR"))
         stress_fail("x_editor: the factory samples do not check out", 0);
     memcpy(fake_flash, keep, sizeof keep);      /* (back as it was, checked and indexed again) */
     for (k = 0; k < SMP_SLOTS; k++) {

@@ -20,40 +20,48 @@
  * store.c's saves (each written sector read back); refused, nothing changes. While a PUT is open (15 s after its last
  * DATA) the autosave waits (grimm.c: ed_open). Main loop only (samples_poll). */
 
-#define ED_PROTO 2u                             /* this protocol's version (INFO; 2: TRACK) */
-#define ED_FMT 1u                               /* the objects' format: sounds of 64 B, slots of SLOT_ALL, settings
+#define ED_PROTO 3u                             /* this protocol's version (INFO; 2: TRACK) */
+#define ED_FMT 3u                               /* the objects' format: sounds of 64 B, slots of SLOT_ALL, settings
                                                  * as set (SET_VER 1) */
-enum { ED_INFO = 20, ED_GET = 21, ED_PUT = 22, ED_TRACK = 23 };
+enum { ED_INFO = 20, ED_GET = 21, ED_PUT = 22, ED_TRACK = 23, ED_TUNING = 24 };
 #define ED_SND7 74u                             /* a sound (64 B) in pack7 */
-enum { EO_SET = 0, EO_SLOT = 1, EO_SND = 16, EO_FACT = 80 };
+enum { EO_SET = 0, EO_SLOT = 1, EO_FACT_EXT = 5, EO_SND = 16, EO_FACT = 80 };
 enum { ER_OK, ER_ARGS, ER_BAD, ER_STOP, ER_FLASH, ER_NOBEGIN };   /* rc: arguments, the object (CRC, size, format,
                                                  * contents), stop / silence first, the flash, no BEGIN (or 15 s old) */
 #define ED_RX (st_img)                          /* a PUT's bytes (up to SLOT_ALL) */
-#define ED_FX (st_img + 2560u)                  /* a factory sound as a 64 B record */
+#define ED_FX (st_img + 2816u)                  /* a factory sound as a 64 B record */
 #define ED_TX (st_img + 3072u)                  /* a reply */
-_Static_assert(SLOT_ALL <= 2560u && 6u + 12u + 293u + 1u <= 1024u, "the editor's room in st_img");
+_Static_assert(SLOT_ALL <= 2816u && 6u + 12u + 293u + 1u <= 1024u, "the editor's room in st_img");
 static int32_t ed_obj = -1;                     /* the PUT begun (its object), -1 none */
 static uint32_t ed_len, ed_crc, ed_got, ed_t;
 
 static int ed_open(void) { return ed_obj >= 0 && fm1_ms - ed_t < 15000u; }
-static uint32_t ed_size(uint32_t o)             /* object o's size (0: none) */
+/* IDs are MIDI data bytes. Factory sounds past index 47 use spare IDs 5..15. */
+_Static_assert(SND_NFACT <= 59u, "factory sounds fit 7-bit editor object IDs");
+static int32_t ed_factory_index(uint32_t o)
 {
-    if (o == EO_SET) return sizeof set;
-    if (o >= EO_SLOT && o < EO_SLOT + 4u) return SLOT_ALL;
-    if ((o >= EO_SND && o < EO_SND + SND_N) || (o >= EO_FACT && o < EO_FACT + SND_NFACT)) return SND_SIZE;
+    if(o>=EO_FACT && o<128u && o-EO_FACT<SND_NFACT) return (int32_t)(o-EO_FACT);
+    if(o>=EO_FACT_EXT && o<EO_SND && o-EO_FACT_EXT+48u<SND_NFACT) return (int32_t)(o-EO_FACT_EXT+48u);
+    return -1;
+}
+static uint32_t ed_factory_object(uint32_t i) { return i<48u ? EO_FACT+i : EO_FACT_EXT+i-48u; }
+static int ed_writable(uint32_t o) { return o<=4u || (o>=EO_SND && o<EO_SND+SND_N); }
+static uint32_t ed_size(uint32_t o)
+{
+    if(o==EO_SET)return sizeof set;
+    if(o>=EO_SLOT && o<EO_SLOT+4u)return SLOT_ALL;
+    if((o>=EO_SND && o<EO_SND+SND_N)||ed_factory_index(o)>=0)return SND_SIZE;
     return 0;
 }
-static const uint8_t *ed_bytes(uint32_t o)      /* object o as it is now (0: no flash) */
+static const uint8_t *ed_bytes(uint32_t o)
 {
-    uint32_t k;
-    if (o == EO_SET) return (const uint8_t *)&set;
-    if (o < EO_SND) return slots[o - EO_SLOT];
-    if (o < EO_FACT) return save_flash(0) ? save_flash(0) + (o - EO_SND) * SND_SIZE : 0;
-    for (k = 0; k < SND_SIZE; k++)              /* (a factory sound: as a user's record, no FM patch of its own) */
-        ED_FX[k] = k < SND_FSIZE && k < 18u ? SND_FACTORY[o - EO_FACT][k] : 0u;
-    ED_FX[0] = SND_MAGIC;
-    st_wr32(ED_FX + 60, st_crc(ED_FX, 60));
-    return ED_FX;
+    uint32_t k;int32_t f;
+    if(o==EO_SET)return (const uint8_t *)&set;
+    if(o>=EO_SLOT && o<EO_SLOT+4u)return slots[o-EO_SLOT];
+    if(o>=EO_SND && o<EO_SND+SND_N)return save_flash(0)?save_flash(0)+(o-EO_SND)*SND_SIZE:0;
+    f=ed_factory_index(o);if(f<0)return 0;
+    for(k=0;k<SND_SIZE;k++)ED_FX[k]=k<SND_FSIZE && k<18u?SND_FACTORY[f][k]:0u;
+    ED_FX[0]=SND_MAGIC;st_wr32(ED_FX+60,st_crc(ED_FX,60));return ED_FX;
 }
 static uint32_t ed_rd35(const uint8_t *p)
 {
@@ -132,7 +140,7 @@ static int ed_frame(const uint8_t *f, uint32_t n, int silent)
 {
     uint8_t r[16];
     uint32_t cmd, o, rc = ER_OK;
-    if (n < 4u || f[1] != 0x47 || f[2] != 0x52 || f[3] < ED_INFO || f[3] > ED_TRACK) return 0;
+    if (n < 4u || f[1] != 0x47 || f[2] != 0x52 || f[3] < ED_INFO || f[3] > ED_TUNING) return 0;
     cmd = f[3], f += 4, n -= 4;
     if (cmd == ED_INFO) {                       /* proto, fmt, the version (0-ended), sounds, a sound's size, the
                                                  * factory's, a slot's size, the settings' size, sample slots, used */
@@ -159,6 +167,25 @@ static int ed_frame(const uint8_t *f, uint32_t n, int silent)
         r[0] = (uint8_t)o, r[1] = (uint8_t)rc;
         ed_wr35(r + 2, off), r[7] = (uint8_t)(c & 0x7Fu), r[8] = (uint8_t)(c >> 7 & 0x7Fu);
         ed_send(cmd, r, 9, rc ? 0 : b + off, rc ? 0u : c, 0);
+        return 1;
+    }
+    if (cmd == ED_TUNING) {
+        uint8_t q[TRK_PK], data[TRK_PK - 52u];
+        uint32_t op = n >= 2u ? f[0] : 2u, t = n >= 2u ? f[1] : NT;
+        if (op > 1u || t >= NT) rc = ER_ARGS;
+        else if (op == 1u) {
+            if (unpack7(f+2, n-2u, data, sizeof data) != sizeof data ||
+                data[0] > 11u || data[1] >= NSCALE || data[2] >= NMAP || data[3] > 3u ||
+                data[18] > 1u || data[19] > 1u || data[20] > 2u) rc = ER_BAD;
+            else {
+                pk_track(q, t);
+                memcpy(q+52, data, sizeof data);
+                uk_track(q, t, 0, TRK_PK);
+            }
+        }
+        if (!rc) pk_track(q, t);
+        r[0] = (uint8_t)op, r[1] = (uint8_t)t, r[2] = (uint8_t)rc;
+        ed_send(cmd, r, 3, q+52, !rc ? TRK_PK-52u : 0u, 0);
         return 1;
     }
     if (cmd == ED_TRACK) {                      /* op, t [, pack7 sound, name] -> op, t, sel, rc [, pack7 track t's
@@ -191,7 +218,7 @@ static int ed_frame(const uint8_t *f, uint32_t n, int silent)
         o = n >= 2u ? f[1] : 0u;
         r[0] = (uint8_t)op, r[1] = (uint8_t)o;
         if (op == 0u) {                         /* BEGIN: fmt, len (5), crc (5) */
-            if (n < 13u || !ed_size(o) || o >= EO_FACT || f[2] != ED_FMT || ed_rd35(f + 3) != ed_size(o)) rc = ER_ARGS;
+            if (n < 13u || !ed_size(o) || !ed_writable(o) || f[2] != ED_FMT || ed_rd35(f + 3) != ed_size(o)) rc = ER_ARGS;
             else if (!silent) rc = ER_STOP;
             else ed_obj = (int32_t)o, ed_len = ed_size(o), ed_crc = ed_rd35(f + 8), ed_got = 0, ed_t = fm1_ms;
         } else if (op == 1u) {                  /* DATA: off (5), pack7, where the last ended */

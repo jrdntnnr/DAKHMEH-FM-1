@@ -132,7 +132,7 @@ static void phase_block(voice_t *v, const volatile int32_t *p, int32_t *mono, in
 {
     uint32_t w1 = (uint32_t)clamp(p[0], 0, 7), w2 = (uint32_t)clamp(p[1], 0, 8), i;
     int32_t depth = clamp(p[2], 0, 127) << 8, pitch = VP16(v), damp = amp1 - amp0;
-    uint32_t dcw, inc = vinc(pitch), inc2;
+    uint32_t dcw, inc = voice_inc(v, pitch), inc2;
     int32_t det = clamp(p[3], 0, 127), line2 = det != 0;
     int32_t d16 = det * 16 / 100, rem = det * 16 - d16 * 100;   /* (cents_inc(), written out) */
     uint32_t ph0 = v->ph[0], ph1 = v->ph[1];
@@ -140,7 +140,7 @@ static void phase_block(voice_t *v, const volatile int32_t *p, int32_t *mono, in
     pd_t b1, b2;
     dcw = (uint32_t)depth * 65535u / (127u << 8);
     dcw = (dcw * 56000u) >> 16;                 /* the classic range of the bend */
-    inc2 = vinc(pitch + d16);
+    inc2 = voice_inc(v, pitch + d16);
     inc2 += (uint32_t)((int32_t)(inc2 >> 12) * (rem * 2367 / 16000));
     pd_setup(&b1, w1, dcw);
     pd_setup(&b2, w2 ? w2 - 1u : w1, dcw);      /* WAVE2 (every other cycle) */

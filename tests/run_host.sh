@@ -5,7 +5,8 @@
 set -e
 cd "$(dirname "$0")/.."
 mkdir -p build/host
-cc -O2 -Wall -Wno-unused-function -DDINGHY_HOST -DAPP_VER="\"${APP_VER:-1.0}\"" -Ifirmware/src -Ifirmware/gen -o build/host/grimm firmware/src/grimm.c
+case "$(uname -s)" in Darwin) set -- '-Dsection(x)=unused';; *) set --;; esac
+cc "$@" -O2 -Wall -Wno-unused-function -DDINGHY_HOST -DAPP_VER="\"${APP_VER:-0.2-dev}\"" -Ifirmware/src -Ifirmware/gen -o build/host/grimm firmware/src/grimm.c
 build/host/grimm build/host/grimm
 python3 - <<'PY'
 from pathlib import Path
