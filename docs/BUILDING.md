@@ -77,3 +77,29 @@ needed on the device.
   MIDI, settings, the flash map, timing.
 - [RULES.md](RULES.md): the chip's rules (no FPU, no libgcc, the audio interrupt's budget).
 - [EDITOR_PROTOCOL.md](EDITOR_PROTOCOL.md): how the editor talks to the FM-1 over USB SysEx.
+
+## macOS account lookup failure
+
+If `limactl` reports `user: unknown userid 501` and native SSH reports
+`No user exists for uid 501`, the calling session cannot resolve the macOS
+account. This does not establish a guest VM failure.
+
+For an already running Lima VM with an active SSH master:
+
+```sh
+python3 tools/lima_shell.py --socket "$LIMA_HOME/ghoul/ssh.sock" -- /usr/local/bin/nerdctl info
+```
+
+The helper uses OpenSSH's documented connection-sharing protocol and passes
+stdin/stdout/stderr plus the remote exit status. It preserves literal arguments
+and supports concurrent builds. It reads no SSH keys and starts no VM.
+
+The local Docker wrapper uses normal `limactl shell` when account lookup works,
+and this helper when it fails. Its original version is kept beside it as
+`docker.limactl-original`. If the VM/master is stopped, start Lima from a
+normal macOS terminal first; the helper cannot create a new SSH connection.
+
+Verified on the current VM: four concurrent sessions, literal argument quoting,
+stderr and exit-status propagation, the full target build, and the target-only
+duplicate-symbol check. This repairs build access; it does not alter macOS
+account records or the guest disk.

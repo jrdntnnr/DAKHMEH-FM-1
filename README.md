@@ -14,7 +14,7 @@ Custom firmware for the **M-VAVE FM-1**, built on [GR!MM](https://github.com/GRi
 - Oud, qanun, ney, tar, santur, mijwiz, arghul and a synthesized rababa.
 - Tape, grain, delay and long reverb.
 
-**Development build.** Emulator tests pass. Final device build and hardware qualification remain pending. Existing SARDAB projects need conversion.
+**Development build.** Target build and emulator tests pass. Hardware qualification remains pending. Existing SARDAB projects need conversion.
 
 [Controls & status](docs/PORT.md) · [Build & run](docs/BUILDING.md) · [Screenshots](docs/screens/dakhmeh/README.md) · [Instrument sources](assets/desert/README.md)
 

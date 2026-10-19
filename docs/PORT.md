@@ -109,21 +109,30 @@ not establish hardware CPU or interrupt-stack margins.
   frames matched at the harness's documented master-volume scaling; four
   screen comparisons and editor/sample/backup checks passed.
 - Seed-1 sanitized host stress passed (`STRESS OK`, 10,384,640 rendered
-  frames). The host portion was run independently because the full
-  `tests/stress.sh` device-name precheck requires the blocked JieLi VM. Logs
-  are local under `build/assessment/`. Browser interaction passed before the
+  frames). The target-only duplicate-symbol check also passed after repairing
+  VM access on 2026-10-19. Logs are local under `build/assessment/`. Browser interaction passed before the
   final responsive layout adjustment; final visual recheck was blocked by
   browser sandbox IPC.
 - `tools/gen_samples.py` reproduced all four embedded banks byte for byte.
 
-An intermediate target build passed: application 382,744 / 581,564 bytes,
-static RAM 86,280 / 98,304, pool 340,808 / 344,064. **The final target rebuild
-was blocked by Lima failing to resolve macOS uid 501.** The existing
-`build/grimm-0.2-desert.fwsc` predates the final sampler retrigger/hammer fixes
-and retains the development `FM-1_966` identity. Do not treat it as the final
-flash package. Re-run `python3 tools/build.py --release 0.2-desert` with the
-configured JieLi toolchain/SDK after resolving the local VM issue, then run
-the device-name checks and physical acceptance tests.
+The final DAKHMEH target build passed on 2026-10-19:
+
+| Region | Used / budget |
+| --- | ---: |
+| Application | 383,528 / 581,564 bytes |
+| Static RAM | 86,264 / 98,304 bytes |
+| Pool | 340,808 / 344,064 bytes |
+
+Package: `build/dakhmeh-0.2-desert.fwsc` (610,110 bytes).
+SHA-256: `3be4890b4876b4e48b923d622270298e24aa083c6b4090baac3047d7e55fca13`.
+The installer parser verified its loader marker, header, file list and file
+CRCs without opening MIDI or writing to a device. The target duplicate-symbol
+check also passed. Hardware performance and updater/recovery testing remain
+pending; the package still carries the development identity `FM-1_966`.
+
+The earlier macOS `unknown userid 501` failure was in the Lima/SSH clients,
+not the running VM. The local Docker wrapper now falls back to the existing
+SSH ControlMaster using `tools/lima_shell.py`; see [building](BUILDING.md).
 
 ## Remaining broader port
 
