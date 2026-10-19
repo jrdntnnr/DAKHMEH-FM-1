@@ -794,6 +794,8 @@ $("f-restore").onchange = async (e) => {
       tracks[t] = fromDevice(r.rec, t), label[t] = r.name, labelEng[t] = tracks[t].eng;
       loaded[t] = JSON.stringify(tracks[t]), from[t] = "AS DAKHMEH STARTS";
     }
+    const sc = await fetch("scales.json");       // the maqam catalog: the MAQAM & TUNING panel needs it from the start
+    if (sc.ok) scaleCatalog = await sc.json();   // (not only once connected)
   } catch (e) {
     say(`COULD NOT LOAD DAKHMEH (grimm.wasm): ${e.message || e}. OPEN THIS PAGE FROM A WEB SERVER, NOT A FILE.`.toUpperCase(), "err");
     return;
