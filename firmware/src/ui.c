@@ -352,6 +352,8 @@ static void ui_slab_fill(uint32_t k, slab_t *S)
     if (PAGES[page].btn == BTN_SEQ && sel_held) { S->dim = 0; lock_slab(k, S); return; }   /* (the step's locks) */
     if (!p) { S->fill = 0; if (page == PG_PROJECTS) put_s(S->val, "-"); return; }   /* ("-": no knob there) */
     S->fill = (uint8_t)((clamp(v, 0, mx) * 8 + mx / 2) / (mx ? mx : 1));
+    if (mx >= 2 && mx <= 8) S->fill = (uint8_t)((clamp(v, 0, mx) + 1) * 8 / (mx + 1));   /* (a choice of 3 .. 9: which one,
+                                                 * the first never empty: 3 of them 2, 5, 8) */
     if (page == PG_GRID && k == 0u && v) S->fill = (uint8_t)(1 + (v - 1) * 7 / 126);   /* (a note: at least 1) */
     switch (page) {
     case PG_SOUND:

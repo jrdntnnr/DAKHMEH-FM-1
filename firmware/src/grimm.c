@@ -1134,9 +1134,12 @@ static void knob_step(uint32_t pg, uint32_t k, int32_t d)   /* KNOB k + 1 on pag
         st->lmask = 0, st->chord = 0;
     }
 }
-static void knob_turn(uint32_t pg, uint32_t k, int32_t d)   /* KNOB k + 1 on page pg turned d detents (accelerated) */
+static void knob_turn(uint32_t pg, uint32_t k, int32_t d)   /* KNOB k + 1 on page pg turned d detents (accelerated; a
+                                                 * knob of up to 9 choices: one choice a pass, a flick never past one) */
 {
-    knob_step(pg, k, enc_accel(ENC_KNOB1 + k, d, knob_max(pg, k) - knob_min(pg, k)));
+    int32_t range = knob_max(pg, k) - knob_min(pg, k);
+    if (range <= 8) d = d < 0 ? -1 : 1;
+    knob_step(pg, k, enc_accel(ENC_KNOB1 + k, d, range));
 }
 
 /* ---- MIDI LEARN (SYSTEM 2, KNOB 1): LEARN, a knob turned on any page (that parameter of that track: learn_to), the

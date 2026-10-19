@@ -68,10 +68,17 @@ reconstruction claims.
 
 Build with `EMSDK=/path/to/emsdk sh web/build_web.sh`, serve this checkout over
 HTTP, and open `/web/dist/editor.html` in Chrome. Choose **Try virtual**, or
-connect the FM-1 over USB MIDI. The tuning panel edits the selected track.
+connect the FM-1 over USB MIDI. The **MAQAM & TUNING** panel sits in the
+track editor (the EDITOR view, under the track's knobs) and edits the
+selected track; since 0.4.2 it is there from the start, not only once
+connected.
 
 On the device/emulator, tap **SEL** through SCALE, CHORD, TUNE 1–3, TUNING and
-TASHRIQ 1–3. TUNING selects MAQAM/TASHRIQ, PRESET/CUSTOM and LIVE/GLIDE/HOLD.
+TASHRIQ 1–3. TUNING selects MAQAM/TASHRIQ (MODE, two positions), PRESET/CUSTOM
+(TABLE, two) and LIVE/GLIDE/HOLD (RETUNE, three). A knob of up to nine
+choices moves one choice a turn pass, however fast the flick (0.4.2), and
+its bar shows which choice: a two-way knob empty or full, a three-way 2, 5
+or 8 segments.
 The three TASHRIQ pages toggle C–B in groups of four. The browser exposes the
 exact custom table and switch amounts; TUNE pages are additional maqam trims.
 
@@ -198,7 +205,7 @@ also retains upstream `30aa882` (MIDI input device selection). Native/WASM
 and tuning tests passed after rebranding. Compatibility format identifiers
 (`grimm-backup`, `grimm-sound`, `sardab-tuning`) remain readable unchanged.
 
-### The desert look (0.4)
+### The desert look (0.4), the knobs (0.4.2)
 
 - **COLOUR DESERT** (SYSTEM): SARDAB's palette, obsidian to bone with copper for the active thing, as a fifth
   theme beside GR!MM's four accents; a fresh device starts on it, a saved COLOUR is kept. The editor accepts
@@ -215,3 +222,6 @@ and tuning tests passed after rebranding. Compatibility format identifiers
 - **Key lights**: the maqam pages glow the keys in the scale and light the root's and TASHRIQ's switched keys;
   CANON glows the key of the step its playhead is at; DREAM playing breathes all keys (off, glow, lit, glow, 2.4 s);
   at boot a light runs the keys right to left once, two glowing behind it.
+- **Knobs** (0.4.2): the detent decoder is SARDAB's (#126: every frame's state counts, a two-state jump from
+  the detent goes the way of a recent click), tested by `tests/enc_test.c`; GR!MM's 2-sample filter lost whole
+  clicks on fast turns. A knob of up to nine choices steps one choice a pass.

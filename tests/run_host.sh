@@ -16,3 +16,4 @@ for p in sorted(Path("build/host").glob("grimm-*.ppm")):
     p.unlink()
     print("screen ->", p.with_suffix(".png"))
 PY
+cc -O1 -w -o build/host/enc_test tests/enc_test.c && build/host/enc_test | tail -1   # the knobs' detent decoder (hal/fm1_input.h)
