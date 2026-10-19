@@ -530,10 +530,10 @@ static int ui_in(int32_t x, int32_t y, int32_t w, int32_t h)   /* does (x, y, w,
  *   glass dark); a silent track's burns low, a shape now and then; a sounding one's grows with its peak, dances (a
  *   row up or down) and flickers (three shapes, uneven) */
 #define NSTAR 46u
-#define LN_Y 118                                /* the lanterns: their top; track t's left edge LN_X(t); 7 x LN_ROWS cells
+#define LN_Y 126                                /* the lanterns: their top; track t's left edge LN_X(t); 7 x LN_ROWS cells
                                                  * (the slabs under them name the tracks) */
 #define LN_X(t) (26 + (t) * 54)
-#define LN_ROWS 10
+#define LN_ROWS 8
 static uint8_t sk_x[NSTAR], sk_y[NSTAR], sk_b[NSTAR], sk_ph[NSTAR], sk_ok;   /* a star: where, M (else D), its sparkle's
                                                  * frame (0: none) */
 static uint8_t cn_h[NT], cn_s[NT], cn_n[NT];    /* a lantern: its flame's rows (0: out), shape, frames to its next shape */
@@ -576,20 +576,20 @@ static void pic_dunes(void)
         ui_rect(x, yn, 4, 164 - yn, UI_K);
     }
 }
-static void pic_lantern(int32_t t)              /* lantern t, 4 px a cell: a hanging oil lamp, its glass 5 x 4 cells with
+static void pic_lantern(int32_t t)              /* lantern t, 4 px a cell: an oil lamp, its glass 5 x 4 cells with
                                                  * the flame (cn_h rows from the wick, shape cn_s), dark glass around it */
 {
     static const char *const FLAME[3][4] = {{"..a..", ".aaa.", ".ala.", ".lwl."}, {"..a..", "..aa.", ".ala.", ".lwl."},
                                             {"..a..", ".aa..", ".ala.", ".lwl."}};
-    static const char *const FRAME[LN_ROWS] = {"...m...", "..mmm..", ".mmmmm.", "d.....d", "d.....d", "d.....d", "d.....d",
-                                               ".mmmmm.", "..mmm..", ".mmmmm."};
+    static const char *const FRAME[LN_ROWS] = {".mmmmm.", "d.....d", "d.....d", "d.....d", "d.....d", ".mmmmm.", "..mmm..",
+                                               ".mmmmm."};
     int32_t x = LN_X(t), y = LN_Y, r, c, h = cn_h[t];
-    if (!ui_in(x, y, 28, 40)) return;
+    if (!ui_in(x, y, 28, 32)) return;
     ui_sprite(x, y, 4, FRAME, LN_ROWS);
     for (r = 0; r < 4; r++)
         for (c = 0; c < 5; c++) {
             char ch = r >= 4 - h ? FLAME[cn_s[t] % 3u][r][c] : '.';
-            ui_rect(x + 4 + c * 4, y + 12 + r * 4, 4, 4, ch == '.' ? UI_K : ui_col(ch));
+            ui_rect(x + 4 + c * 4, y + 4 + r * 4, 4, 4, ch == '.' ? UI_K : ui_col(ch));
         }
 }
 static void pic_home(void)                      /* Main: the stars, the dunes, a lantern a track */
@@ -630,7 +630,7 @@ static void ui_home_frame(int draw)             /* a frame of HOME's picture (dr
         }
         if (h != cn_h[t] || (s != cn_s[t] && h > 2u)) {
             cn_h[t] = (uint8_t)h, cn_s[t] = (uint8_t)s;
-            if (draw) ui_home_part(LN_X((int32_t)t) + 4, LN_Y + 12, 20, 16);
+            if (draw) ui_home_part(LN_X((int32_t)t) + 4, LN_Y + 4, 20, 16);
         }
         cn_s[t] = (uint8_t)s;
     }
