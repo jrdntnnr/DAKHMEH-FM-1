@@ -198,7 +198,7 @@ also retains upstream `30aa882` (MIDI input device selection). Native/WASM
 and tuning tests passed after rebranding. Compatibility format identifiers
 (`grimm-backup`, `grimm-sound`, `sardab-tuning`) remain readable unchanged.
 
-### The desert look (after 0.3)
+### The desert look (0.4)
 
 - **COLOUR DESERT** (SYSTEM): SARDAB's palette, obsidian to bone with copper for the active thing, as a fifth
   theme beside GR!MM's four accents; a fresh device starts on it, a saved COLOUR is kept. The editor accepts
