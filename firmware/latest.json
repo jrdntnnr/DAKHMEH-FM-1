@@ -1,7 +1,7 @@
 {
- "version": "0.4",
+ "version": "0.4.1",
  "product": "FM-1_966",
- "pkg": "firmware/dakhmeh-0.4.fwsc",
+ "pkg": "firmware/dakhmeh-0.4.1.fwsc",
  "size": 610110,
- "sha256": "c719bfd40b2d61df0cce70bc9c58154d850276424a2e70ce3f407c5266bc1346"
+ "sha256": "b41c1be976aa75e825734b92c21e272bd37d564e9f6984669327e0628e5882ad"
 }
