@@ -21,19 +21,22 @@
  * DATA) the autosave waits (grimm.c: ed_open). Main loop only (samples_poll). */
 
 #define ED_PROTO 3u                             /* this protocol's version (INFO; 2: TRACK) */
-#define ED_FMT 3u                               /* the objects' format: sounds of 64 B, slots of SLOT_ALL, settings
-                                                 * as set (SET_VER 1) */
+#define ED_FMT 4u                               /* the objects' format: sounds of 64 B, slots of SLOT_ALL, settings
+                                                 * as set (SET_VER 1); 4: DAKHMEH's extras (store.c XT_PK) after a
+                                                 * slot's FM patches, VELOCITY after the settings. A PUT of format 3
+                                                 * (an older backup: without them) is taken, the rest as before them */
+#define ED_FMT3 3u
 enum { ED_INFO = 20, ED_GET = 21, ED_PUT = 22, ED_TRACK = 23, ED_TUNING = 24 };
 #define ED_SND7 74u                             /* a sound (64 B) in pack7 */
 enum { EO_SET = 0, EO_SLOT = 1, EO_FACT_EXT = 5, EO_SND = 16, EO_FACT = 80 };
 enum { ER_OK, ER_ARGS, ER_BAD, ER_STOP, ER_FLASH, ER_NOBEGIN };   /* rc: arguments, the object (CRC, size, format,
                                                  * contents), stop / silence first, the flash, no BEGIN (or 15 s old) */
 #define ED_RX (st_img)                          /* a PUT's bytes (up to SLOT_ALL) */
-#define ED_FX (st_img + 2816u)                  /* a factory sound as a 64 B record */
 #define ED_TX (st_img + 3072u)                  /* a reply */
-_Static_assert(SLOT_ALL <= 2816u && 6u + 12u + 293u + 1u <= 1024u, "the editor's room in st_img");
+#define ED_FX (st_img + 4032u)                  /* a factory sound as a 64 B record */
+_Static_assert(SLOT_ALL <= 3072u && 6u + 12u + 293u + 1u <= 960u, "the editor's room in st_img");
 static int32_t ed_obj = -1;                     /* the PUT begun (its object), -1 none */
-static uint32_t ed_len, ed_crc, ed_got, ed_t;
+static uint32_t ed_len, ed_crc, ed_got, ed_t;   /* (ed_len: as sent; format 3: shorter than ed_size) */
 
 static int ed_open(void) { return ed_obj >= 0 && fm1_ms - ed_t < 15000u; }
 /* IDs are MIDI data bytes. Factory sounds past index 47 use spare IDs 5..15. */
@@ -99,11 +102,11 @@ static uint32_t ed_commit(uint32_t o)
         uint32_t i;
         memcpy(&s, ED_RX, sizeof s);
         if (s.ver != SET_VER || s.oct < -2 || s.oct > 2 || s.tune < -50 || s.tune > 50 || s.col > 3u ||
-            s.mch > MCH_ALL || s.scr > 4u || s.out > 1u || s.nlk > NLINK)
+            s.mch > MCH_ALL || s.scr > 4u || s.out > 1u || s.nlk > NLINK || s.vel > 3u)
             return ER_BAD;
         for (i = 0; i < s.nlk; i++)
             if (s.lk[i][1] >= NPAGE || s.lk[i][2] > 3u || s.lk[i][3] > 3u) return ER_BAD;
-        sy_col = s.col, sy_mch = s.mch, sy_tune = s.tune, sy_scr = s.scr, sy_out = s.out;
+        sy_col = s.col, sy_mch = s.mch, sy_tune = s.tune, sy_scr = s.scr, sy_out = s.out, sy_vel = s.vel;
         sys_sync();                             /* (a new MIDI CHANNEL: what is on out there let go first) */
         set.oct = s.oct, set.nlk = s.nlk, set.ver = SET_VER;
         memcpy(set.lk, s.lk, sizeof set.lk);
@@ -218,9 +221,13 @@ static int ed_frame(const uint8_t *f, uint32_t n, int silent)
         o = n >= 2u ? f[1] : 0u;
         r[0] = (uint8_t)op, r[1] = (uint8_t)o;
         if (op == 0u) {                         /* BEGIN: fmt, len (5), crc (5) */
-            if (n < 13u || !ed_size(o) || !ed_writable(o) || f[2] != ED_FMT || ed_rd35(f + 3) != ed_size(o)) rc = ER_ARGS;
+            uint32_t len = n >= 13u ? ed_rd35(f + 3) : 0u;
+            uint32_t old = o == EO_SET ? sizeof set - 1u : o >= EO_SLOT && o < EO_SLOT + 4u ? SLOT_ALL - XT_ALL : ed_size(o);
+            if (n < 13u || !ed_size(o) || !ed_writable(o) || !((f[2] == ED_FMT && len == ed_size(o)) ||
+                                                                (f[2] == ED_FMT3 && len == old)))
+                rc = ER_ARGS;
             else if (!silent) rc = ER_STOP;
-            else ed_obj = (int32_t)o, ed_len = ed_size(o), ed_crc = ed_rd35(f + 8), ed_got = 0, ed_t = fm1_ms;
+            else ed_obj = (int32_t)o, ed_len = len, ed_crc = ed_rd35(f + 8), ed_got = 0, ed_t = fm1_ms;
         } else if (op == 1u) {                  /* DATA: off (5), pack7, where the last ended */
             uint32_t off = n >= 7u ? ed_rd35(f + 2) : 0u, d;
             if (!ed_open() || (int32_t)o != ed_obj) rc = ER_NOBEGIN;
@@ -234,7 +241,12 @@ static int ed_frame(const uint8_t *f, uint32_t n, int silent)
             else if (!silent) rc = ER_STOP;     /* (the PUT stays open: stop, then COMMIT again) */
             else {
                 if (ed_got != ed_len || st_crc(ED_RX, ed_len) != ed_crc) rc = ER_BAD;
-                else rc = ed_commit(o);
+                else {
+                    uint32_t k;
+                    for (k = ed_len; k < ed_size(o); k++) ED_RX[k] = 0;   /* (format 3: VELOCITY 127 / FIXED, CANON
+                                                 * OFF) */
+                    rc = ed_commit(o);
+                }
                 ed_obj = -1;
                 if (rc == ER_BAD) hd_say("EDITOR: REFUSED");
             }

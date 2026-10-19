@@ -1,8 +1,18 @@
 # DAKHMEH protocol 3 extension
 
-Current DAKHMEH builds advertise protocol **3**, object format **3**, 52
-factory sounds, 111-byte tracks and 2,768-byte slot objects. The upstream
-reference below describes the original formats; use INFO for current sizes.
+Current DAKHMEH builds advertise protocol **3**, object format **4**, 52
+factory sounds, 111-byte tracks, 3,040-byte slot objects and 169-byte
+settings. The upstream reference below describes the original formats; use
+INFO for current sizes.
+
+**Format 4** adds two things. Each slot gains 4 × 68 bytes after its FM
+patches, one block per track: 64 step velocities (1–127; 0 reads as 127),
+then CANON (0–13), then 3 spare bytes. The settings gain byte 168,
+VELOCITY (0 FIXED, 1 LINEAR, 2 SOFT, 3 HARD). A BEGIN may still name
+format 3 with the format-3 size (2,768 or 168 bytes). The FM-1 then fills
+the missing bytes with zeros (velocity 127, CANON OFF, VELOCITY FIXED), so
+older backups restore. The web editor and `tools/fm1_editor_test.py` send
+a format-3 backup that way.
 Factory indices 0–47 use object IDs 80–127; indices 48–51 use IDs 5–8. These
 objects are read-only. User sound IDs and track sound records are unchanged.
 

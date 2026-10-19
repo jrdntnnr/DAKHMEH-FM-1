@@ -382,19 +382,24 @@ export async function makeBackup(client, info, progress) {
   return { format: "grimm-backup", version: 1, proto: info.proto, fmt: info.fmt, firmware: info.firmware,
            date: new Date().toISOString().replace("T", " ").slice(0, 19), objects };
 }
-export function checkBackup(b, info) {                       // -> [{id, data, what}] or throws (nothing written)
+// format 4 (DAKHMEH's velocity, CANON, DREAM) added bytes after a slot (4 x 68) and after the settings (1); a format 3
+// backup restores as it is: the FM-1 takes its shorter objects and fills the rest with the defaults
+const FMT3_EXTRA = { slot: 4 * 68, set: 1 };
+export function checkBackup(b, info) {                       // -> [{id, data, what, fmt}] or throws (nothing written)
   if (!b || b.format !== "grimm-backup" || b.version !== 1) throw new EditorError("not a compatible DAKHMEH backup file", 90);
-  if (b.fmt !== info.fmt) throw new EditorError(`the backup's format is ${b.fmt}, the FM-1's is ${info.fmt}`, 90);
-  const sizes = new Map(backupObjects(info).map(([id, size, what]) => [id, [size, what]]));
+  const legacy = b.fmt === 3 && info.fmt === 4;
+  if (b.fmt !== info.fmt && !legacy) throw new EditorError(`the backup's format is ${b.fmt}, the FM-1's is ${info.fmt}`, 90);
+  const sizes = new Map(backupObjects(info).map(([id, size, what]) => [id, [legacy ?
+    size - (id === OBJ.SET ? FMT3_EXTRA.set : id >= OBJ.SLOT && id < OBJ.SLOT + 4 ? FMT3_EXTRA.slot : 0) : size, what]]));
   return b.objects.map((o) => {
     const d = unb64(o.data), s = sizes.get(o.id);
     if (!s || d.length !== s[0] || crc32(d) !== o.crc) throw new EditorError(`object ${o.id} is damaged or not this firmware's`, 90);
-    return { id: o.id, data: d, what: s[1] };
+    return { id: o.id, data: d, what: s[1], fmt: b.fmt };
   });
 }
 export async function restoreBackup(client, objs, info, progress) {
   for (let i = 0; i < objs.length; i++) {
-    await client.put(objs[i].id, objs[i].data, info.fmt);
+    await client.put(objs[i].id, objs[i].data, objs[i].fmt ?? info.fmt);
     if (progress) progress(i + 1, objs.length, objs[i].what);
   }
 }

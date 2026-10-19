@@ -36,7 +36,9 @@ enum { ENG_VA, ENG_FM, ENG_SAMPLE, ENG_VOICE, ENG_WHEEL, ENG_PHYS, ENG_PHASE, NE
 typedef struct {
     volatile uint32_t req;                      /* main loop: + 1 after want_* */
     volatile uint8_t want_note, want_trk, want_on;   /* main loop: start this note for this track / release */
+    volatile uint8_t want_vel;                  /* .. at this velocity (1..127) */
     volatile uint8_t stage, trk, note, eng;     /* audio: ST_*, the track, the note and the engine it plays */
+    int32_t vgain;                              /* audio: its velocity's gain (Q15; 127: 32767, as before velocity) */
     volatile int32_t env;                       /* audio: Q24 */
     uint32_t seen;                              /* audio: the req it acted on */
     int32_t tuning_now, tuning_start;          /* audio: decicents, for glide / hold */
@@ -72,9 +74,11 @@ typedef struct {
                                                  * DECAY 0..99 (fm.c; a built-in PATCH's: fm_builtin) */
     volatile int32_t root, scale, map, temper, trim[12], custom;
     volatile int32_t tuning_mode, tuning_system, retune, table[12], tash_on[12], tash_cents[12];
+    volatile int32_t canon;                     /* CANON (ARP's second page): OFF, or the second playhead's interval
+                                                 * (seq.c canon_fire) */
 } track_t;
 #define TRK_DEF {ENG_VA, {{0, 10, 90, 30}, {0, 64, 64, 20}, {0, 0, 127, 0}, {0, 12, 64, 10}, {4, 0, 40, 0}, {0, 64, 80, 64}, {0, 0, 60, 0}}, 100, 0, 100, 0, 64, 0, \
-                 {22, 85, 127, 89}, 0, 0, 0, 0, 0, 4, 1, 50, 64, 0, 0, 0, 127, 0, 100, 0, 0, {{0}}, 0, 0, 0, 0, {0}, 0, 0, 0, 0, {0}, {0}, {-50,-50,-50,-50,-50,-50,-50,-50,-50,-50,-50,-50}}
+                 {22, 85, 127, 89}, 0, 0, 0, 0, 0, 4, 1, 50, 64, 0, 0, 0, 127, 0, 100, 0, 0, {{0}}, 0, 0, 0, 0, {0}, 0, 0, 0, 0, {0}, {0}, {-50,-50,-50,-50,-50,-50,-50,-50,-50,-50,-50,-50}, 0}
 static track_t trk[NT] = {TRK_DEF, TRK_DEF, TRK_DEF, TRK_DEF};   /* VA: SAW, DETUNE 10, CUTOFF 90, RESONANCE 30
                                                  * (Felucca's ANALOG); FM: BELL as made, DETUNE 20; SAMPLE: slot 1,
                                                  * the whole sample, forward; VOICE: A, SHIFT 0, BUZZ 64, BREATH 10
@@ -145,10 +149,18 @@ static inline uint32_t voice_inc(const voice_t *v, int32_t p16)
 static const engine_t *const ENGINES[NENG] = {&VA_ENGINE, &FM_ENGINE, &SAMPLE_ENGINE, &FORMANT_ENGINE, &WHEEL_ENGINE,
                                               &PHYS_ENGINE, &PHASE_ENGINE};   /* (by ENG_) */
 
-/* main loop: voice v plays note for track t (a sounding voice fades out first; the same note of the same track
- * sounding goes on up from where it is) */
-static void voice_start(uint32_t v, uint32_t t, uint32_t note)
+/* a velocity's gain, Q15: v (1..127) x (127 + v) / (2 x 127 x 127): 127 full (as before velocity), 64 about -8 dB,
+ * 32 about -16 dB */
+static int32_t vel_gain(uint32_t v)
 {
+    v = v < 1u ? 1u : v > 127u ? 127u : v;
+    return (int32_t)(v * (127u + v) * 32767u / 32258u);
+}
+/* main loop: voice v plays note for track t at velocity vel (a sounding voice fades out first; the same note of the
+ * same track sounding goes on up from where it is, at the new velocity) */
+static void voice_start(uint32_t v, uint32_t t, uint32_t note, uint32_t vel)
+{
+    vc[v].want_vel = (uint8_t)vel;
     vc[v].want_note = (uint8_t)note;
     vc[v].want_trk = (uint8_t)t;
     vc[v].want_on = 1;
@@ -175,6 +187,7 @@ static void voice_begin(voice_t *v)             /* a note from silence */
         v->rng = 1234567 + (int32_t)(v - vc);
     v->eng = (uint8_t)(trk[v->trk].eng >= 0 && trk[v->trk].eng < NENG ? trk[v->trk].eng : 0);
     v->tuning_now = v->tuning_start = tuning_dc(v->trk, v->note);
+    v->vgain = vel_gain(v->want_vel);
     ENGINES[v->eng]->begin(v);
     v->env = 0;
     v->stage = ST_ATK;
@@ -217,6 +230,7 @@ static int32_t env_tick(voice_t *v)
             e = 0;
         } else if (v->want_note == v->note && v->want_trk == v->trk && v->eng == trk[v->trk].eng && v->stage != ST_FADE) {
             v->tuning_now = v->tuning_start = tuning_dc(v->trk, v->note);
+            v->vgain = vel_gain(v->want_vel);   /* (its new velocity: the block's ramp, no click) */
             if(v->eng == ENG_SAMPLE && smp[sp_slot(trk[v->trk].p[ENG_SAMPLE])].zones) sampler_begin(v);
             v->stage = ST_ATK;                  /* the same note again (same engine): on up from where it is */
         } else {
@@ -286,6 +300,7 @@ static uint32_t voices_render(int32_t (*tb)[VB], uint32_t n)
         for (k = 0; k < NV; k++) {
             voice_t *v = &vc[k];
             int32_t amp0 = v->amp, amp1 = env_tick(v);
+            if (v->vgain < 32767) amp1 = mulq15(amp1, v->vgain);   /* (the ENV at its velocity; 127: as it was) */
             uint32_t t = v->trk;
             v->amp = amp1;
             if (!amp0 && !amp1)

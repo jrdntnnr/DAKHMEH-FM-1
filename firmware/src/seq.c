@@ -3,11 +3,17 @@
 /* GR!MM's sequencer: a sequence a track (T1..T4), all four played together on one tempo, each with its own STEPS,
  * DIVISION, SWING and PLAY MODE.
  *   a step: OFF (NOTE 0) or a note, with CHANCE (0..100 %: it plays or not, each time), RATCHET (1..4 hits within the
- *   step) and LENGTH (in steps: longer than one, the note ties over the next ones)
+ *   step), LENGTH (in steps: longer than one, the note ties over the next ones) and VELOCITY (1..127: as the key or
+ *   the MIDI note was played when recorded; STEP page; saved before velocity: 127, as loud as it was)
  *   the clock: 96 ticks a quarter note (every DIVISION, triplets too, a whole number of ticks), in the audio ISR a
  *   control block (32 samples) at a time: a note starts and stops within 0.73 ms of its time
  *   SWING: every other step later, by up to half a step
  *   PLAY MODE: FORWARD, BACKWARD, PINGPONG, RANDOM
+ *   CANON (DAKHMEH, after SARDAB's: ARP's second page): a second playhead plays the pattern half its STEPS behind (one
+ *   step at least), transposed by a scale interval (3RD 5TH 7TH: scale degrees, OCT twelve semitones; and down); the
+ *   R modes play it backwards from its last step, a crab canon. Each step's note (a chord step: its chord) for its
+ *   LENGTH at three quarters of its velocity; CHANCE, RATCHET and the step locks are the first playhead's. Its notes:
+ *   SRC_CANON
  * Sequenced notes play through the track's source and ENV, as the keys' notes (grimm.c note_on, note_off: SRC_SEQ);
  * LATCH does not touch them. A track keeps SEQ_NPAT patterns (one now: song mode adds more). Nothing is saved yet.
  * The main loop edits the steps and the settings, starts and stops it (NQ_PLAY, NQ_STOP); the audio ISR plays it. */
@@ -15,11 +21,13 @@
 #define SEQ_N 64u                               /* steps a pattern */
 #define SEQ_NPAT 1u                             /* patterns a track (song mode: more, later) */
 #define SEQ_NOFF 8u                             /* a track's sequenced notes sounding at once */
+#define SEQ_NCN 4u                              /* .. CANON's */
 #define SEQ_TICK_Q16 1806336000u                /* a tick at 1 BPM, in samples Q16: 60 x 44100 / 96 x 65536 */
 enum { SEQ_FWD, SEQ_BWD, SEQ_PONG, SEQ_RND, SEQ_NMODE };
 
 typedef struct {
     volatile int32_t note, chance, ratchet, len;   /* note 0: OFF */
+    volatile int32_t vel;                       /* VELOCITY 1..127 */
     volatile int32_t chord;                     /* a chord step: 0x80 | VOICING << 4 | CHORD TYPE (recorded in chord
                                                  * mode: its chord, chord mode on or not); 0: a note */
     volatile uint8_t lmask, lv[4];              /* its locks: which of the source's four (bits), their values */
@@ -35,7 +43,10 @@ typedef struct {
     int32_t dir;                                /* audio: PINGPONG's way */
     uint8_t off_note[SEQ_NOFF];                 /* audio: the notes sounding, */
     uint32_t off_left[SEQ_NOFF];                /* .. the ticks to their end (0: a free place) */
-    uint32_t r_note, r_left, r_next, r_sub, r_gate, r_last, r_chord;   /* audio: the step's hits to come (RATCHET) */
+    uint32_t r_note, r_left, r_next, r_sub, r_gate, r_last, r_chord, r_vel;   /* audio: the step's hits to come
+                                                 * (RATCHET) */
+    uint8_t cn_note[SEQ_NCN];                   /* audio: CANON's notes sounding, */
+    uint32_t cn_left[SEQ_NCN];                  /* .. the ticks to their end (0: a free place) */
 } seq_trk_t;
 static seq_trk_t seq[NT];
 static volatile int32_t seq_bpm = 120;          /* the tempo, 20..300 (SELECT on HOME) */
@@ -63,7 +74,7 @@ static void seq_clear(void)                     /* main loop: the four sequences
         for (p = 0; p < SEQ_NPAT; p++)
             for (i = 0; i < SEQ_N; i++) {
                 seq_step_t *s = &seq[t].pat[p].st[i];
-                s->note = 0, s->chance = 100, s->ratchet = 1, s->len = 1;
+                s->note = 0, s->chance = 100, s->ratchet = 1, s->len = 1, s->vel = 127;
                 s->chord = 0, s->lmask = 0, s->lv[0] = s->lv[1] = s->lv[2] = s->lv[3] = 0;
             }
     }
@@ -82,34 +93,85 @@ static uint32_t seq_rnd(void)
 }
 static int32_t seq_steps(const seq_trk_t *S) { return clamp(S->steps, 1, (int32_t)SEQ_N); }
 
-/* audio: a hit of track t: the note on now (a chord step: its chord), off after gate ticks (a note still on from
- * before: again from here) */
-static void seq_note(uint32_t t, uint32_t note, uint32_t gate, uint32_t chord)
+/* audio: a hit of track t from src (SRC_SEQ: the steps' n places of on / left; SRC_CANON: CANON's): the note on now
+ * as play (a chord step: its chord), at velocity vel, off after gate ticks (a note still on from before: again from
+ * here) */
+static void seq_hit(uint32_t t, uint32_t src, uint8_t *on, uint32_t *left, uint32_t n, uint32_t note, uint32_t play,
+                    uint32_t gate, uint32_t chord, uint32_t vel)
+{
+    uint32_t i, f = n;
+    for (i = 0; i < n; i++)
+        if (left[i] && on[i] == note) {
+            note_off(t, note, src, 0);
+            left[i] = 0;
+        }
+    for (i = 0; i < n && f == n; i++)
+        if (!left[i]) f = i;
+    if (f == n) {                               /* (all taken: the first goes) */
+        f = 0;
+        note_off(t, on[0], src, 0);
+    }
+    note_on(t, note, play, src, 0, chord ? (int32_t)chord : -1, vel);   /* (its origin: the note; a note step: the
+                                                 * track's chord mode) */
+    on[f] = (uint8_t)note;
+    left[f] = gate ? gate : 1u;
+}
+static void seq_note(uint32_t t, uint32_t note, uint32_t gate, uint32_t chord, uint32_t vel)
 {
     seq_trk_t *S = &seq[t];
-    uint32_t i, f = SEQ_NOFF;
-    for (i = 0; i < SEQ_NOFF; i++)
-        if (S->off_left[i] && S->off_note[i] == note) {
-            note_off(t, note, SRC_SEQ, 0);
-            S->off_left[i] = 0;
+    seq_hit(t, SRC_SEQ, S->off_note, S->off_left, SEQ_NOFF, note, trk[t].map == MAP_SEQ ? sc_snap(t, note) : note, gate,
+            chord, vel);
+}
+static void seq_offs(uint32_t t, uint32_t src, uint8_t *on, uint32_t *left, uint32_t n)   /* audio: all off now */
+{
+    uint32_t i;
+    for (i = 0; i < n; i++)
+        if (left[i]) {
+            note_off(t, on[i], src, 0);
+            left[i] = 0;
         }
-    for (i = 0; i < SEQ_NOFF && f == SEQ_NOFF; i++)
-        if (!S->off_left[i]) f = i;
-    if (f == SEQ_NOFF) {                        /* (all taken: the first goes) */
-        f = 0;
-        note_off(t, S->off_note[0], SRC_SEQ, 0);
-    }
-    note_on(t, note, trk[t].map == MAP_SEQ ? sc_snap(t, note) : note, SRC_SEQ, 0, chord ? (int32_t)chord : -1);   /* (its origin: the note; a note step: the
-                                                 * track's chord mode) */
-    S->off_note[f] = (uint8_t)note;
-    S->off_left[f] = gate ? gate : 1u;
+}
+
+/* CANON: OFF, then the intervals (scale degrees; CANON_OCT twelve semitones), the R modes (backwards) from CANON_REV */
+#define NCANON 14
+#define CANON_REV 9
+#define CANON_OCT 100
+static const int8_t CANON_STEP[NCANON] = {0, 2, 4, 6, CANON_OCT, -2, -4, -6, -CANON_OCT, 2, 4, CANON_OCT, -2, -CANON_OCT};
+static const char *const CANON_NAME[NCANON] = {"OFF", "3RD", "5TH", "7TH", "OCT", "-3RD", "-5TH", "-7TH", "-OCT",
+                                               "R 3RD", "R 5TH", "R OCT", "R -3RD", "R -OCT"};
+static uint32_t canon_note(uint32_t t, uint32_t n, int32_t d)   /* note n, d of CANON's steps on (0 / 128 out: n) */
+{
+    int32_t m;
+    if (d == CANON_OCT || d == -CANON_OCT) m = (int32_t)n + (d > 0 ? 12 : -12);
+    else m = sc_walk(t, (int32_t)n, d);         /* (CHR: semitones) */
+    return m >= 1 && m <= 127 ? (uint32_t)m : n;
+}
+/* audio: the step playing starts: CANON's step, half the pattern behind (the R modes: from its end, backwards) */
+static void canon_fire(uint32_t t)
+{
+    seq_trk_t *S = &seq[t];
+    int32_t mode = clamp(trk[t].canon, 0, NCANON - 1), n = seq_steps(S), idx;
+    const seq_step_t *s;
+    uint32_t note, play, stl;
+    if (!mode) return;
+    idx = mode >= CANON_REV ? n - 1 - S->pos : S->pos;
+    idx = (idx + n - (n / 2 ? n / 2 : 1)) % n;
+    s = &S->pat[clamp(S->cur, 0, SEQ_NPAT - 1)].st[idx];
+    note = (uint32_t)clamp(s->note, 0, 127);
+    if (!note) return;                          /* (an OFF step: what sounds plays on to its LENGTH) */
+    play = trk[t].map == MAP_SEQ ? sc_snap(t, note) : note;
+    play = canon_note(t, play, CANON_STEP[mode]);
+    stl = SEQ_DIV_T[clamp(S->div, 0, 7)];
+    seq_hit(t, SRC_CANON, S->cn_note, S->cn_left, SEQ_NCN, play, play,
+            (uint32_t)clamp(s->len, 1, (int32_t)SEQ_N) * stl - 1u, (uint32_t)s->chord,
+            (uint32_t)clamp(s->vel, 1, 127) * 3u / 4u + 1u);
 }
 /* audio: the step playing starts (after its swing): CHANCE, then its first hit and the RATCHET's to come */
 static void seq_fire(uint32_t t)
 {
     seq_trk_t *S = &seq[t];
     const seq_step_t *s = &S->pat[clamp(S->cur, 0, SEQ_NPAT - 1)].st[S->pos];
-    uint32_t note = (uint32_t)clamp(s->note, 0, 127), r, stl, sub, len, gate, last;
+    uint32_t note = (uint32_t)clamp(s->note, 0, 127), r, stl, sub, len, gate, last, vel = (uint32_t)clamp(s->vel, 1, 127);
     if (!note || seq_rnd() % 100u >= (uint32_t)clamp(s->chance, 0, 100))
         return;
     r = (uint32_t)clamp(s->ratchet, 1, 4);
@@ -118,9 +180,9 @@ static void seq_fire(uint32_t t)
     sub = stl / r;
     gate = sub * 3u / 4u;                       /* a ratchet's hits: three quarters of theirs */
     last = len * stl - (r - 1u) * sub - 1u;     /* the last (or only) hit: to the note's end, a tick short */
-    seq_note(t, note, r > 1u ? gate : last, (uint32_t)s->chord);
+    seq_note(t, note, r > 1u ? gate : last, (uint32_t)s->chord, vel);
     S->r_left = r - 1u, S->r_note = note, S->r_next = sub, S->r_sub = sub, S->r_gate = gate, S->r_last = last;
-    S->r_chord = (uint32_t)s->chord;
+    S->r_chord = (uint32_t)s->chord, S->r_vel = vel;
 }
 static void seq_next(seq_trk_t *S)              /* audio: the next step, by PLAY MODE */
 {
@@ -147,9 +209,12 @@ static void seq_track_tick(uint32_t t)          /* audio: a tick of track t */
                                                  * next tick) */
         if (S->off_left[i] && !--S->off_left[i])
             note_off(t, S->off_note[i], SRC_SEQ, 0);
+    for (i = 0; i < SEQ_NCN; i++)               /* (CANON's) */
+        if (S->cn_left[i] && !--S->cn_left[i])
+            note_off(t, S->cn_note[i], SRC_CANON, 0);
     if (S->r_left && !--S->r_next) {            /* the RATCHET's next hit */
         S->r_left--;
-        seq_note(t, S->r_note, S->r_left ? S->r_gate : S->r_last, S->r_chord);
+        seq_note(t, S->r_note, S->r_left ? S->r_gate : S->r_last, S->r_chord, S->r_vel);
         S->r_next = S->r_sub;
     }
     if (S->t == 0u) {                           /* a step begins: its locks are the sound's till the next (lfo.c) */
@@ -158,8 +223,10 @@ static void seq_track_tick(uint32_t t)          /* audio: a tick of track t */
         for (j = 0; j < 4u; j++) lk_v[t][j] = s->lv[j];
         lk_m[t] = s->note ? s->lmask : 0u;
     }
-    if (S->t == sw)
+    if (S->t == sw) {
+        canon_fire(t);
         seq_fire(t);
+    }
     if (++S->t >= stl) {
         S->t = 0;
         seq_next(S);
@@ -176,13 +243,11 @@ static void seq_rewind(void)                    /* audio: all four from their fi
 static void seq_jump(uint32_t s)                /* audio: slot s in now (a slot recalled, the song's next), all four from
                                                  * their first step, the notes of before released first */
 {
-    uint32_t t, i;
-    for (t = 0; t < NT; t++)
-        for (i = 0; i < SEQ_NOFF; i++)
-            if (seq[t].off_left[i]) {
-                note_off(t, seq[t].off_note[i], SRC_SEQ, 0);
-                seq[t].off_left[i] = 0;
-            }
+    uint32_t t;
+    for (t = 0; t < NT; t++) {
+        seq_offs(t, SRC_SEQ, seq[t].off_note, seq[t].off_left, SEQ_NOFF);
+        seq_offs(t, SRC_CANON, seq[t].cn_note, seq[t].cn_left, SEQ_NCN);
+    }
     if (slot_used(s)) slot_apply_isr(s);
     seq_rewind();
 }
@@ -200,15 +265,12 @@ static void seq_start(uint32_t slot)            /* audio (NQ_PLAY, the slot in u
 }
 static void seq_stop(void)                      /* audio (NQ_STOP): all four stopped, their notes released */
 {
-    uint32_t t, i;
+    uint32_t t;
     seq_on = 0;
     song_stop();                                /* (song record: its last step written, then END) */
     for (t = 0; t < NT; t++) {
-        for (i = 0; i < SEQ_NOFF; i++)
-            if (seq[t].off_left[i]) {
-                note_off(t, seq[t].off_note[i], SRC_SEQ, 0);
-                seq[t].off_left[i] = 0;
-            }
+        seq_offs(t, SRC_SEQ, seq[t].off_note, seq[t].off_left, SEQ_NOFF);
+        seq_offs(t, SRC_CANON, seq[t].cn_note, seq[t].cn_left, SEQ_NCN);
         seq[t].r_left = 0;
         seq[t].pos = -1;
         lk_m[t] = 0;                            /* (the knobs' sound again) */
@@ -252,12 +314,13 @@ static int32_t seq_nearest(uint32_t t)
     default: return p + 1 < n ? p + 1 : 0;
     }
 }
-/* main loop (and arp.c's REC): a note into track t's step i (an empty one: CHANCE 100, one hit, one step); chord: its
- * chord (a chord step, chord_step()), 0 a note */
-static void seq_write(uint32_t t, int32_t i, uint32_t note, uint32_t chord)
+/* main loop (and arp.c's REC): a note into track t's step i (an empty one: CHANCE 100, one hit, one step) at velocity
+ * vel; chord: its chord (a chord step, chord_step()), 0 a note */
+static void seq_write(uint32_t t, int32_t i, uint32_t note, uint32_t chord, uint32_t vel)
 {
     seq_step_t *s = &seq[t].pat[clamp(seq[t].cur, 0, SEQ_NPAT - 1)].st[clamp(i, 0, (int32_t)SEQ_N - 1)];
     if (!s->note) s->chance = 100, s->ratchet = 1, s->len = 1;
     s->note = (int32_t)note;
     s->chord = (int32_t)chord;
+    s->vel = (int32_t)(vel < 1u ? 1u : vel > 127u ? 127u : vel);
 }

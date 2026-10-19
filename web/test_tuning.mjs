@@ -18,7 +18,7 @@ for(const e of ar.data)for(const v of [null,...(e.transpositions||[])])for(const
 }
 assert(valid>100);
 const vf=await VirtualFM1.create(readFileSync('web/dist/grimm.wasm'));vf.warmUp();const cl=new Client(vf),info=await cl.info();
-assert.equal(info.proto,3);assert.equal(info.fmt,3);
+assert.equal(info.proto,3);assert.equal(info.fmt,4);
 const initial=await cl.tuning(0);assert.equal(decodeTuning(initial).on.reduce((a,b)=>a+b),0);
 assert.deepEqual(await cl.tuning(0,encodeTuning(s)),encodeTuning(s));
 assert.deepEqual(await cl.tuning(0),encodeTuning(s));

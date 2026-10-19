@@ -4,7 +4,10 @@
  * and the slots, not with sounds).
  *   ARP on: the track's keys and MIDI notes (after SCALE; chord mode on: each its whole chord) go into its list instead
  *   of sounding; the arp plays them a step at a time in MODE's order (UP, DOWN, UP-DOWN, RANDOM, AS PLAYED; CHORD: all
- *   of them each step), OCTAVES times an octave higher, each note GATE of its step long
+ *   of them each step; TRILL, SARDAB's: each note UP, then its upper neighbour in the track's scale, a step each;
+ *   DRONE, SARDAB's: the lowest note held sounds on, a tanbur's open string, while the others go UP over it, the drone
+ *   moving with the lowest note and ending with the list), OCTAVES times an octave higher, each note GATE of its step
+ *   long (DRONE: the notes over it)
  *   LATCH OFF: a key's notes leave the list when it is let go; LATCH ON: they stay, the key again takes them out; an
  *   empty list stops it (its note released), as does ARP off
  *   the clock: the sequencer's when it plays (its steps on the sequencer's grid), else the tempo's, from the first note
@@ -13,14 +16,18 @@
  * Its notes: grimm.c note_on / note_off as SRC_ARP (their origin: the note), the track's source and ENV, no chord of
  * their own. Audio ISR; the main loop reads the list (the screen, the keys' lights). */
 
-enum { ARP_UP, ARP_DOWN, ARP_UPDN, ARP_RND, ARP_PLAYED, ARP_CHORD, NARPMODE };
+enum { ARP_UP, ARP_DOWN, ARP_UPDN, ARP_RND, ARP_PLAYED, ARP_CHORD, ARP_TRILL, ARP_DRONE, NARPMODE };   /* (saved:
+                                                 * append only) */
+#define ARP_DRONE_ID(n) (0x80u | (n))           /* DRONE's held note's origin (lat_id): apart from the steps' */
 #define NARPRATE 9
 #define ARP_N 16u                               /* notes in a track's list at most */
 #define ARP_PN (2u * ARP_N * 4u)                /* a pattern's steps at most (UP-DOWN over 4 octaves) */
 static const uint16_t ARP_RATE_T[NARPRATE] = {384, 192, 96, 48, 24, 12, 64, 32, 16};   /* RATE: ticks a step */
 static const char *const ARP_RATE_NAME[NARPRATE] = {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T"};
-static const char *const ARP_MODE_NAME[NARPMODE] = {"UP", "DOWN", "UP-DOWN", "RANDOM", "AS PLAYED", "CHORD"};
-static const char *const ARP_MODE_SHORT[NARPMODE] = {"UP", "DOWN", "UPDN", "RAND", "PLAYED", "CHORD"};   /* (slabs) */
+static const char *const ARP_MODE_NAME[NARPMODE] = {"UP", "DOWN", "UP-DOWN", "RANDOM", "AS PLAYED", "CHORD", "TRILL",
+                                                    "DRONE"};
+static const char *const ARP_MODE_SHORT[NARPMODE] = {"UP", "DOWN", "UPDN", "RAND", "PLAYED", "CHORD", "TRILL",
+                                                     "DRONE"};   /* (slabs) */
 
 typedef struct {
     uint8_t note[ARP_N], id[ARP_N], root[ARP_N];   /* the list: the notes, where they came from (lat_id), the note
@@ -30,6 +37,8 @@ typedef struct {
     uint32_t ft, since;                         /* its own clock (ticks since its first note); ticks since its step */
     volatile uint32_t pos;                      /* the step to come */
     volatile int32_t last;                      /* the step played last (the screen; -1: none) */
+    uint8_t vel;                                /* its notes' velocity: the last key's (MIDI note's) into the list */
+    uint8_t drone;                              /* DRONE: the note it holds + 1 (0: none) */
     uint32_t was;                               /* ARP on, as last seen */
 } arp_t;
 static arp_t arp[NT];
@@ -54,6 +63,10 @@ static uint32_t arp_pattern(uint32_t t, uint8_t *p, uint32_t oct)
                 b[j] = b[j - 1], b[j - 1] = x;
             }
     if (mode == ARP_CHORD) oct = 1;
+    if (mode == ARP_DRONE && n) {               /* (the lowest: the drone, not a step) */
+        for (i = 1; i < n; i++) b[i - 1u] = b[i];
+        n--;
+    }
     for (o = 0; o < oct; o++)
         for (i = 0; i < n; i++)
             if (b[i] + 12u * o <= 127u) p[k++] = (uint8_t)(b[i] + 12u * o);
@@ -80,6 +93,24 @@ static void arp_release(uint32_t t)             /* audio: its notes on, off */
                 arp[t].on[w] &= ~(1u << b);
             }
 }
+static void arp_drone_off(uint32_t t)          /* audio: DRONE's held note off */
+{
+    if (!arp[t].drone) return;
+    note_off(t, ARP_DRONE_ID(arp[t].drone - 1u), SRC_ARP, 0);
+    arp[t].drone = 0;
+}
+static void arp_drone_set(uint32_t t)           /* audio: DRONE: the lowest note of the list held (a new one: moved) */
+{
+    arp_t *A = &arp[t];
+    uint32_t i, lo = 128u;
+    for (i = 0; i < A->n && i < ARP_N; i++)
+        if (A->note[i] < lo) lo = A->note[i];
+    if (lo > 127u || (A->drone && A->drone - 1u == lo && note_find(t, ARP_DRONE_ID(lo), SRC_ARP) >= 0)) return;   /* (the
+                                                 * same, still sounding: on; dropped by a mute, the overload guard: again) */
+    arp_drone_off(t);
+    note_on(t, ARP_DRONE_ID(lo), lo, SRC_ARP, 0, 0, A->vel ? A->vel : 127u);
+    A->drone = (uint8_t)(lo + 1u);
+}
 static void arp_clear(uint32_t t)               /* audio: the list emptied (its keys' echoes off), its note off */
 {
     uint32_t i, j;
@@ -89,33 +120,43 @@ static void arp_clear(uint32_t t)               /* audio: the list emptied (its 
         if (j == i && arp[t].id[i] < 27u) ec_put(0x80, t, arp[t].root[i]);   /* (a key's: echoed on as it came in) */
     }
     arp_release(t);
+    arp_drone_off(t);
     arp[t].n = 0, arp[t].pos = 0, arp[t].last = -1;
 }
 static void arp_play(uint32_t t, uint32_t note)
 {
     if (note > 127u) return;
-    note_on(t, note, note, SRC_ARP, 0, 0);      /* (no chord of its own) */
+    note_on(t, note, note, SRC_ARP, 0, 0, arp[t].vel ? arp[t].vel : 127u);   /* (no chord of its own) */
     arp[t].on[note >> 5] |= 1u << (note & 31u);
 }
 static void arp_step(uint32_t t)                /* audio: the step due: its note (CHORD: its notes) on */
 {
     arp_t *A = &arp[t];
     uint8_t p[ARP_PN];
-    uint32_t oct = (uint32_t)clamp(trk[t].arp_oct, 1, 4), len = arp_pattern(t, p, oct), i, first;
+    uint32_t oct = (uint32_t)clamp(trk[t].arp_oct, 1, 4), len = arp_pattern(t, p, oct), i, first,
+             mode = (uint32_t)clamp(trk[t].arp_mode, 0, NARPMODE - 1);
     arp_release(t);
+    if (mode == ARP_DRONE) arp_drone_set(t);    /* (the drone on, or moved with the lowest note) */
+    else arp_drone_off(t);                      /* (MODE turned away from DRONE) */
     if (!len) return;
     if (clamp(trk[t].arp_mode, 0, NARPMODE - 1) == ARP_CHORD) {   /* all of them, an octave up a step */
         uint32_t o = A->pos % oct;
         for (i = 0; i < len; i++) arp_play(t, p[i] + 12u * o);
         first = p[0] + 12u * o, A->last = (int32_t)o, A->pos = o + 1u;
+    } else if (mode == ARP_TRILL) {             /* each note twice: itself, then the scale's next note up (CHR: a
+                                                 * semitone) */
+        uint32_t k = A->pos % (2u * len), x = p[k >> 1];
+        if (k & 1u) x = (uint32_t)sc_walk(t, (int32_t)x, 1);
+        arp_play(t, x);
+        first = x, A->last = (int32_t)(k >> 1), A->pos = k + 1u;
     } else {
-        i = clamp(trk[t].arp_mode, 0, NARPMODE - 1) == ARP_RND ? seq_rnd() % len : A->pos % len;
+        i = mode == ARP_RND ? seq_rnd() % len : A->pos % len;
         arp_play(t, p[i]);
         first = p[i], A->last = (int32_t)i, A->pos = i + 1u;
     }
     if (arp_rec == (int32_t)t && seq_on && first <= 127u) {   /* REC: into the sequence, as a key's live note */
         int32_t s = seq_nearest(t);
-        if (s >= 0) seq_write(t, s, first, 0u);   /* (its notes: notes, not chord steps) */
+        if (s >= 0) seq_write(t, s, first, 0u, A->vel ? A->vel : 127u);   /* (its notes: notes, not chord steps) */
     }
 }
 static void arp_tick(uint32_t t, int locked)    /* audio: a tick of track t's arp (locked: the sequencer's tick) */
@@ -157,9 +198,10 @@ static void arp_take(uint32_t t, uint32_t id, int echo)
     A->n = k;
     if (!k) arp_clear(t);                       /* (none left: it stops) */
 }
-static void arp_add(uint32_t t, uint32_t id, uint32_t note, int echo)
+static void arp_add(uint32_t t, uint32_t id, uint32_t note, int echo, uint32_t vel)
 {
     arp_t *A = &arp[t];
+    A->vel = (uint8_t)vel;
     uint8_t ns[CH_MAX];
     uint32_t n = 1, i;
     if (note > 127u) return;

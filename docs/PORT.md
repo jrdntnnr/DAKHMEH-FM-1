@@ -36,6 +36,28 @@ production SARDAB `main`. It is a development port, not a migration release.
   replaces all four slots after confirmation. No separate transfer is needed
   on an empty device. [Instrument sources and installation](../assets/desert/README.md).
 
+- **Velocity** (from SARDAB): every note carries a velocity from the key,
+  the MIDI note or the step, and its level follows it (Q15 gain
+  v·(127+v)/(2·127²): 127 is unchanged, 64 is about −8 dB). Recorded steps
+  keep theirs, and the STEP page edits it. Ratchets, chords, the arp and
+  restarts on a new source keep it. SYSTEM 2 VELOCITY turns on SARDAB's key
+  sensing (Charles Vestal's fm1-velocity ADC/weak-drive method,
+  `hal/fm1_velocity.h`, `src/key_velocity.h`). It is FIXED by default: every
+  key at 127, as before.
+- **CANON** (from SARDAB; ARP's second page): a second playhead half the
+  pattern behind, a scale interval (3RD/5TH/7TH/OCT, down too) or backwards
+  (R modes). It plays each step's note or chord for its LENGTH at 3/4
+  velocity, tuned per note like the first playhead.
+- **DREAM / DREAM MAQAM** (from SARDAB; GLO's second page): a key composes a
+  four-chord ambient piece over the four tracks' sounds. MOOD MAQAM (the
+  default) carries the selected track's maqam and full tuning to all four.
+  Pads are scale-triad chord steps, so they are tuned. DENSITY, EVOLVE and
+  DRIFT work as on SARDAB. It is undoable and refuses to run in song mode.
+- **ARP TRILL and DRONE** (from SARDAB): TRILL plays each note then its
+  upper scale neighbour (tuned per note); DRONE holds the lowest note while
+  the others go UP over it, moving with the lowest note. They are appended
+  as modes 6 and 7 (older projects are unchanged).
+
 The Rababa preset is a synthesized sustained string approximation. A CC BY
 rebab recording was located, but its Arabic provenance is unconfirmed and it
 has not been downloaded or installed. The source link is in the instrument
@@ -79,10 +101,15 @@ External MIDI output still uses ordinary note numbers: MPE/MTS is not included.
 
 ## Storage and compatibility
 
-Track records are 111 bytes; working-project version is 9, slot-stream version
-8, editor protocol 3 and object format 3. Slot objects are 2,768 bytes and the
-working-project payload is 2,804 bytes. The editor's factory scratch area
-starts at 2,816. [Protocol extension](EDITOR_PROTOCOL.md).
+Track records are 111 bytes; working-project version is 10, slot-stream version
+8, editor protocol 3 and object format 4. Slot objects are 3,040 bytes and the
+working-project payload is 3,080 bytes. Version 10 appends a 68-byte block per
+track (64 step velocities, CANON) plus DREAM's four settings. The slots keep
+their stream version: their blocks live in the stream's previously zero tail
+after the FM patches (12,160 of 12,240 bytes now used). Version 9 projects and
+older slot streams load with velocity 127 and CANON OFF. The editor still
+accepts format-3 objects, and the settings gain VELOCITY (169 bytes; older
+168/167-byte settings load as FIXED). [Protocol extension](EDITOR_PROTOCOL.md).
 
 Older working-project readers supply defaults for missing tuning fields.
 Older slot streams/backups and production SARDAB GBM2 projects are **not**
@@ -114,6 +141,15 @@ not establish hardware CPU or interrupt-stack margins.
   final responsive layout adjustment; final visual recheck was blocked by
   browser sandbox IPC.
 - `tools/gen_samples.py` reproduced all four embedded banks byte for byte.
+- 2026-10-19, velocity/CANON/DREAM: `sh tests/run_desert.sh` also runs
+  `tests/velocity_test.c` (sanitized). It covers gains, key/MIDI/step/
+  ratchet/arp velocity, the sensing filter, ARP TRILL (Bayati, CHR) and
+  DRONE (hold, move, gate, mute, mode change, end, every mode played), all 13 CANON modes (scale,
+  maqam, chord, reverse, gate, stop), storage v10/v9 plus slot stream,
+  flash boot and editor format 3/4, and DREAM in every mood and density
+  with 300 EVOLVE changes kept in scale. The native/WASM comparison
+  (`web/test_web.mjs`, 28 checks), `web/test_tuning.mjs` and the sanitized
+  stress test (seeds 1, 2 and 3) all passed.
 
 The final DAKHMEH target build passed on 2026-10-19:
 
@@ -125,6 +161,16 @@ The final DAKHMEH target build passed on 2026-10-19:
 
 Package: `build/dakhmeh-0.2-desert.fwsc` (610,110 bytes).
 SHA-256: `3be4890b4876b4e48b923d622270298e24aa083c6b4090baac3047d7e55fca13`.
+
+With velocity, CANON and DREAM (2026-10-19, development build
+`build/dakhmeh.fwsc`), the ROM-reference, `.ram_text` and hal-only register
+checks all passed:
+
+| Region | Used / budget |
+| --- | ---: |
+| Application | 394,760 / 581,564 bytes |
+| Static RAM | 89,928 / 98,304 bytes |
+| Pool | 341,356 / 344,064 bytes |
 The installer parser verified its loader marker, header, file list and file
 CRCs without opening MIDI or writing to a device. The target duplicate-symbol
 check also passed. Hardware performance and updater/recovery testing remain
@@ -136,16 +182,18 @@ SSH ControlMaster using `tools/lima_shell.py`; see [building](BUILDING.md).
 
 ## Remaining broader port
 
-Hardware CPU/audio/USB/retuning tests; production backup conversion; velocity
-port; further DAKHMEH visual treatment; selected DREAM MAQAM/CANON
-features; final package identity, updater/recovery qualification and firmware
-release. This repository is the new DAKHMEH fork; the older SARDAB repository is unchanged. BLE and DX7
+Hardware CPU/audio/USB/retuning tests; **hardware validation of key
+velocity sensing** (the scan now owns the ADC: MASTER and battery read
+from its cache, as on SARDAB; untested on this build's hardware); production
+backup conversion; further visual
+treatment; final package identity, updater/recovery qualification and
+firmware release. This repository is the new DAKHMEH fork; the older SARDAB repository is unchanged. BLE and DX7
 imports remain excluded.
 
 ## DAKHMEH rebrand
 
 Persian دخمه splash, DAKHMEH application/editor labels and package filenames.
-Seven current firmware captures are in `docs/screens/dakhmeh/`. The browser
+Ten current firmware captures (including STEP velocity, CANON and DREAM) are in `docs/screens/dakhmeh/`. The browser
 also retains upstream `30aa882` (MIDI input device selection). Native/WASM
 and tuning tests passed after rebranding. Compatibility format identifiers
 (`grimm-backup`, `grimm-sound`, `sardab-tuning`) remain readable unchanged.

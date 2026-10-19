@@ -89,7 +89,7 @@ static void stress_system(uint32_t kind)        /* "settings", "dark", "woken", 
 }
 
 /* the version 5 forms (steps of 3 B, no chord steps, no locks) of the working project, of a slot */
-#define ST_W5 WORK_LEN(52u, 20u, SEQ_PK5, 0u, 0u)
+#define ST_W5 WORK_LEN(52u, 20u, SEQ_PK5, 0u, 0u, 0u)
 #define ST_S5 SLOT_LEN(52u, SEQ_PK5, 0u)
 static uint8_t st_w[ST_W5], st_s[4u * ST_S5], st_x[ST_W5 > 4u * ST_S5 ? ST_W5 : 4u * ST_S5];
 static const uint8_t *st_seq5(uint8_t *o, const uint8_t *n)   /* a sequence (260 B) as 196 B: o; the next of n */
@@ -276,8 +276,8 @@ static void stress_hlinks(void)                 /* "h_links": settings as steps 
     set.nlk = 2;
     set.lk[0][0] = 21, set.lk[0][1] = PG_HOME, set.lk[0][2] = 2, set.lk[0][3] = 0, set.lk[0][4] = 0;   /* (T3 LEVEL) */
     set.lk[1][0] = 22, set.lk[1][1] = PG_TRACK, set.lk[1][2] = 1, set.lk[1][3] = 3, set.lk[1][4] = 0;  /* (T4 CUTOFF) */
-    settings_save(&set, sizeof set - 1u);
-    host_store[4 + sizeof set - 1u] = 0;        /* (no ver: as they were) */
+    settings_save(&set, sizeof set - 2u);
+    host_store[4 + sizeof set - 2u] = host_store[4 + sizeof set - 1u] = 0;   /* (no ver, no VELOCITY: as they were) */
     sys_load();
     if (set.lk[0][1] != PG_MIX1 || set.lk[0][2] != 0 || set.lk[0][3] != 2 || set.lk[1][1] != PG_HOME || set.lk[1][3] != 3)
         stress_fail("h_links: the old links not moved onto MIXER 1's LEVEL, HOME (page)", set.lk[0][1]);

@@ -9,3 +9,7 @@ cc "$@" -O1 -g -Wall -Wno-unused-function -fsanitize=address,undefined -fno-sani
     -fno-sanitize-recover=undefined -fno-omit-frame-pointer '-DAPP_VER="0.1-desert"' \
     -Ifirmware/src -Ifirmware/gen tests/desert_test.c -lm -o build/assessment/desert-test
 build/assessment/desert-test
+cc "$@" -O1 -g -Wall -Wno-unused-function -fsanitize=address,undefined -fno-sanitize=shift \
+    -fno-sanitize-recover=undefined -fno-omit-frame-pointer '-DAPP_VER="0.1-desert"' \
+    -Ifirmware/src -Ifirmware/gen tests/velocity_test.c -lm -o build/assessment/velocity-test
+build/assessment/velocity-test

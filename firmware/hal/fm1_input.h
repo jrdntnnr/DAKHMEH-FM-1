@@ -284,6 +284,9 @@ static void fm1__frame(void)
  * column n: the lines go lit | glow | backlight of p, each layer ends when its time is up (TIMER4,
  * checked after every bit), and the latch comes with the lines dark. */
 static uint8_t fm1__tick_col;
+/* key velocity (SARDAB's port of charlesvestal/fm1-velocity): the scan owns the ADC; a conversion started after a
+ * column's LEDs is finished at the start of the next tick, before the rows are read (fm1_velocity.h) */
+#include "fm1_velocity.h"
 static void fm1_input_tick(void)
 {
     uint32_t p = fm1__tick_col, n = p + 1u == FM1_NCOL ? 0u : p + 1u, i;
@@ -291,6 +294,7 @@ static void fm1_input_tick(void)
     uint32_t lit = fm1_led[p], a = fm1_led_dim[p] & ~lit, b = fm1_led_bg[p] & ~lit & ~a;
     uint32_t ta = a ? FM1__NS_T(FM1_GLOW_NS) : 0u, tb = b ? FM1__NS_T(fm1_led_bg_ns) : 0u;
     uint32_t tmax = ta > tb ? ta : tb;
+    fm1_kv_finish();
     fm1__led_lines(0);
     fm1_in.raw[p] = (uint8_t)fm1__rows();          /* column p has been latched one tick (the lines dark) */
     if (tmax) {
@@ -315,6 +319,8 @@ static void fm1_input_tick(void)
     fm1__keys(p);                                  /* its keys now: no wait for the frame's end */
     if (n == 0u)
         fm1__frame();
+    fm1_kv_contacts(p);
+    fm1_kv_start(n);
 }
 
 /* main-loop critical section against fm1_input_tick (main loop only: it

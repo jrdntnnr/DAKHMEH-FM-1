@@ -65,7 +65,7 @@ int main(void)
     trk[0].scale=16; trk[0].map=MAP_WHITE; assert(sc_key(0,61)==-1 && sc_key(0,62)==62);
     trk[0].map=MAP_CHR; trk[0].ch_type=CH_SCALE7; trk[0].chord=1;
     n=chord_notes(0,60,notes); assert(n==4 && notes[1]==64 && notes[3]==71);
-    note_on(0,7,60,SRC_KEY,0,-1); render(); assert(nlat==4); owners();
+    note_on(0,7,60,SRC_KEY,0,-1,127); render(); assert(nlat==4); owners();
     for(i=0;i<nlat;i++) {
         voice_t *v=&vc[lat_voice[i]]; int32_t out[CTL]={0}; uint32_t before=v->ph[0];
         va_block(v,trk[0].p[ENG_VA],out,20000,20000);
@@ -75,7 +75,7 @@ int main(void)
     trk[0].root=7; trk[0].map=MAP_ALL; note_off(0,7,SRC_KEY,0); assert(!nlat);
     /* Recorded chord steps and arpeggiated notes resolve tuning at playback. */
     clean(); trk[0].scale=16; trk[0].ch_type=CH_SCALE7;
-    seq_note(0,60,24,0x80|CH_SCALE7); render(); assert(nlat==4);
+    seq_note(0,60,24,0x80|CH_SCALE7,127); render(); assert(nlat==4);
     for(i=0;i<nlat;i++) if(lat_note[i]==64 || lat_note[i]==71) assert(tuning_dc(0,lat_note[i])==-500);
     note_off(0,60,SRC_SEQ,0); assert(!nlat);
     arp_play(0,64); render(); assert(nlat==1 && vc[lat_voice[0]].note==64);
@@ -142,8 +142,8 @@ int main(void)
         {uint8_t bad[SMP_HDR_LEN];memcpy(bad,SMP_FACT_HDR[t],sizeof bad);bad[64]^=1;assert(!smp_header_ok(bad));}
     }
     /* A repeated one-shot at the same pitch starts again, even if its voice is still held. */
-    clean();trk[0].eng=ENG_SAMPLE;voice_start(0,0,60);render();
-    sp[0].done=1;voice_start(0,0,60);render();assert(!sp[0].done && sp[0].ui>0);
+    clean();trk[0].eng=ENG_SAMPLE;voice_start(0,0,60,127);render();
+    sp[0].done=1;voice_start(0,0,60,127);render();assert(!sp[0].done && sp[0].ui>0);
     /* Every desert preset really renders; no percussion preset in this category. */
     clean();
     for(s=0;s<SND_NFACT;s++)if(SND_FACTORY[s][1]==CAT_DESERT) {
@@ -154,11 +154,11 @@ int main(void)
     }
     /* Twelve simultaneous voices, then switching a held track to constrained engines. */
     clean();
-    for(t=0;t<NT;t++) for(i=0;i<3;i++) note_on(t,i,48+t*12+i*4,SRC_KEY,0,0);
+    for(t=0;t<NT;t++) for(i=0;i<3;i++) note_on(t,i,48+t*12+i*4,SRC_KEY,0,0,127);
     render(); assert(nlat==12); owners();
     trk[0].eng=ENG_PHYS; restart_track(0); owners();
     for(i=0;i<20;i++) render();
-    for(i=0;i<8;i++) { note_on(0,20+i,60+i,SRC_KEY,0,0); owners(); render(); }
+    for(i=0;i<8;i++) { note_on(0,20+i,60+i,SRC_KEY,0,0,127); owners(); render(); }
     n=0;for(i=0;i<nlat;i++) n+=lat_trk[i]==0; assert(n==PHYS_NV);
     trk[0].eng=ENG_SAMPLE; restart_track(0); owners();
     for(i=0;i<20;i++) render();

@@ -19,11 +19,11 @@ int main(void)
     fm1_ms=4000;
     snd_apply(SND_FACTORY[40],0);brw_at(0,SND_FACTORY[40]);
     trk[0].scale=16;trk[0].map=MAP_CHR;
-    note_on(0,7,60,SRC_KEY,0,-1);
+    note_on(0,7,60,SRC_KEY,0,-1,127);
     for(k=0;k<100;k++)app_audio(audio,VB);
     shot("desert-oud",PG_SOUND);
     note_off(0,7,SRC_KEY,0);
-    note_on(0,11,64,SRC_KEY,0,-1);
+    note_on(0,11,64,SRC_KEY,0,-1,127);
     ch_last=64;shot("maqam-rast",PG_SCALE);
     ch_last=60;trk[0].chord=1;trk[0].ch_type=CH_SCALE7;
     shot("chords",PG_CHORD);
@@ -35,5 +35,11 @@ int main(void)
         seq[0].pat[0].st[k].note=notes[k%8];
     }
     shot("sequencer",PG_GRID);
+    for(k=0;k<16;k++) seq[0].pat[0].st[k].vel=40+(int32_t)(k*5);
+    seq[0].cursor=5;shot("velocity",PG_STEP);
+    trk[0].canon=9;shot("canon",PG_CANON);
+    trk[0].canon=0;sel=1;trk[1].scale=18;
+    trk[0].eng=ENG_WHEEL;trk[1].eng=ENG_PHYS;trk[2].env[0]=0;trk[3].eng=ENG_FM;trk[3].env[0]=0;
+    dr_mood=DM_MAQAM;dream_compose(2);sel=0;shot("dream",PG_DREAM);
     return 0;
 }

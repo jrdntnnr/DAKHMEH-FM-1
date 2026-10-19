@@ -23,6 +23,10 @@
  *   well), saved again as 6; the slots saved before version 6 (an object in sectors 3 / 4, two copies) load from
  *   their newest copy and are written in the stream (sector 5 first, then the older copy's, then the newer's: a cut
  *   in between leaves an old copy to load from again).
+ *   DAKHMEH's extras (XT_PK a track: its 64 steps' VELOCITY, CANON; the working project's also DREAM's four, XT_G): the
+ *   working project's after the FM patches (version 10; older: VELOCITY 127, CANON OFF, DREAM's defaults); a slot's
+ *   after its FM patches, in the stream's room after the four slots' FM patches (zeros before: the same defaults), so
+ *   the slots' stream keeps its version
  *   undo / redo: one level, a snapshot of the tracks and sequences (and a slot, if the action changed one) taken before
  *   an action (grimm.c says which), restored on undo, the state before the undo kept for redo
  * Each record ends in its CRC-32: an erased sector, a cut save or another version is no record. A write erases a
@@ -43,26 +47,34 @@
 #define SEQ_PK 260u                             /* a sequence, packed: 4 + 64 steps x 4 B (the 4th: its chord) */
 #define SEQ_PK5 196u                            /* (version 5 and before: 3 B a step) */
 #define LOCK_PK 288u                            /* a track's step locks: 64 x the four values, 64 x 4 bits which */
+#define XT_PK 68u                               /* a track's extras: 64 steps' VELOCITY (0: 127), CANON, 3 spare */
+#define XT_ALL (XT_PK * NT)
+#define XT_G 4u                                 /* the working project's: DREAM's MOOD, DENSITY, EVOLVE, DRIFT */
 #define SLOT_LEN(tn, sq, lk) (4u + NT * ((tn) + (sq) + (lk)))   /* a slot: [0] used, its tracks, sequences, locks */
 #define SONG_PK 20u                             /* the song: its chain (16), MODE, the mutes and solos, 2 spare */
-#define WORK_LEN(tn, sg, sq, lk, fm) (NT * ((tn) + (sq) + (lk)) + 16u + 4u + (sg) + (fm))   /* the working project:
-                                                 * tracks, effects, tempo, slot, .., sequences, locks, the song, the FM
-                                                 * patches (an older version's sizes: sg 0 before the song, lk 0 before
-                                                 * locks, fm 0 before the FM patches) */
+#define WORK_LEN(tn, sg, sq, lk, fm, xt) (NT * ((tn) + (sq) + (lk)) + 16u + 4u + (sg) + (fm) + (xt))   /* the working
+                                                 * project: tracks, effects, tempo, slot, .., sequences, locks, the song,
+                                                 * the FM patches, the extras (an older version's sizes: sg 0 before the
+                                                 * song, lk 0 before locks, fm 0 before the FM patches, xt 0 before the
+                                                 * extras) */
 #define SLOT_PK SLOT_LEN(TRK_PK, SEQ_PK, LOCK_PK)
-#define SLOT_ALL (SLOT_PK + FM_ALL)             /* a slot in RAM: SLOT_PK, its FM patches after (the stream's tail) */
-#define WORK_PK WORK_LEN(TRK_PK, SONG_PK, SEQ_PK, LOCK_PK, FM_ALL)
+#define SLOT_ALL (SLOT_PK + FM_ALL + XT_ALL)    /* a slot in RAM: SLOT_PK, its FM patches after, its extras after them
+                                                 * (the stream's tail) */
+#define WORK_PK WORK_LEN(TRK_PK, SONG_PK, SEQ_PK, LOCK_PK, FM_ALL, XT_ALL + XT_G)
 #define OBJ_HDR 12u                             /* magic, the save count, type, version, length */
 #define OBJ_MAGIC 0x4B4D5247u                   /* "GRMK" */
-#define OBJ_VER 9u
+#define OBJ_VER 10u
 #define SLS_VER 8u                              /* SARDAB: 111-byte tracks; older slot streams require conversion */
-#define NOBJV 8u
-static const uint16_t OBJ_VERS[NOBJV][6] = {{9, 111, 20, 260, 288, FM_ALL}, {8, 70, 20, 260, 288, FM_ALL}, {7, 52, 20, 260, 288, FM_ALL}, {6, 52, 20, 260, 288, 0},
-                                            {5, 52, 20, 196, 0, 0}, {4, 52, 0, 196, 0, 0}, {3, 48, 0, 196, 0, 0},
-                                            {2, 44, 0, 196, 0, 0}};   /* the versions loaded, newest first: a track's,
-                                                 * the song's, a sequence's, the locks', the FM patches' size (6: before
-                                                 * the FM patches; 5: before chord steps and locks; 4: before the song;
-                                                 * 3: before the LFO; 2: before ARP) */
+#define NOBJV 9u
+static const uint16_t OBJ_VERS[NOBJV][7] = {{10, 111, 20, 260, 288, FM_ALL, XT_ALL + XT_G},
+                                            {9, 111, 20, 260, 288, FM_ALL, 0}, {8, 70, 20, 260, 288, FM_ALL, 0},
+                                            {7, 52, 20, 260, 288, FM_ALL, 0}, {6, 52, 20, 260, 288, 0, 0},
+                                            {5, 52, 20, 196, 0, 0, 0}, {4, 52, 0, 196, 0, 0, 0}, {3, 48, 0, 196, 0, 0, 0},
+                                            {2, 44, 0, 196, 0, 0, 0}};   /* the versions loaded, newest first: a
+                                                 * track's, the song's, a sequence's, the locks', the FM patches', the
+                                                 * extras' size (9: before the extras; 6: before the FM patches; 5:
+                                                 * before chord steps and locks; 4: before the song; 3: before the LFO;
+                                                 * 2: before ARP) */
 #define SLS_MAGIC 0x534C5247u                   /* "GRLS": a sector of the slots' stream */
 #define SLS_P (4096u - OBJ_HDR - 4u)            /* the stream's bytes a sector */
 #define SLS_N 3u                                /* its sectors: 3, 4, 5 */
@@ -71,6 +83,7 @@ enum { CAT_DRONE, CAT_PAD, CAT_BELL, CAT_ORGAN, CAT_KEYS, CAT_BASS, CAT_TEXTURE,
 static const char *const CAT_NAME[NCAT] = {"DRONE", "PAD", "BELL", "ORGAN", "KEYS", "BASS", "TEXTURE", "VOICE", "OTHER", "DESERT"};
 _Static_assert(NENG <= PK_ENG, "a save keeps every source's settings");
 _Static_assert(SND_N * SND_SIZE <= 4096u && OBJ_HDR + WORK_PK + 4u <= 4096u && 4u * SLOT_ALL <= SLS_N * SLS_P &&
+               XT_PK >= SEQ_N + 1u &&
                SAVE_NSECT >= 3u + SLS_N, "the save sectors");
 
 /* the factory sounds: GR!MM's own (first drafts), records as the user's (no CRC: in the image, read-only), first in
@@ -506,6 +519,24 @@ static const uint8_t *uk_lock(const uint8_t *q, uint32_t t, uint32_t lk)   /* (l
     return q + lk;
 }
 
+static uint8_t *pk_xt(uint8_t *q, uint32_t t)   /* a track's extras: its steps' VELOCITY, CANON */
+{
+    const seq_pat_t *P = &seq[t].pat[0];
+    uint32_t k;
+    for (k = 0; k < SEQ_N; k++) q[k] = (uint8_t)clamp(P->st[k].vel, 1, 127);
+    q[SEQ_N] = (uint8_t)clamp(trk[t].canon, 0, NCANON - 1);
+    for (k = SEQ_N + 1u; k < XT_PK; k++) q[k] = 0;
+    return q + XT_PK;
+}
+static const uint8_t *uk_xt(const uint8_t *q, uint32_t t)   /* (q 0: saved before them: VELOCITY 127, CANON OFF) */
+{
+    seq_pat_t *P = &seq[t].pat[0];
+    uint32_t k;
+    for (k = 0; k < SEQ_N; k++) P->st[k].vel = q && q[k] ? clamp(q[k], 1, 127) : 127;
+    trk[t].canon = q ? clamp(q[SEQ_N], 0, NCANON - 1) : 0;
+    return q ? q + XT_PK : 0;
+}
+
 /* ---- the working project: tracks, effects, tempo, the slot in use, sequences (WORK_PK) */
 static volatile int32_t *const PK_FX[16] = {&tf_wow, &tf_sat, &tf_tone, &tf_hiss, &ge_size, &ge_dens, &ge_scat, &ge_mix,
                                             &dl_time, &dl_fb, &dl_wear, &dl_mix, &rv_size, &rv_damp, &rv_mix, &rv_pre};
@@ -525,13 +556,17 @@ static void pk_work(uint8_t *q)
     q[16] = (uint8_t)clamp(song_mode, 0, NSONGMODE - 1);   /* MODE, */
     q[17] = (uint8_t)((trk_mute & 15u) | (trk_solo & 15u) << 4), q[18] = q[19] = 0;   /* the mutes and solos */
     for (t = 0; t < NT; t++) pk_fm(q + SONG_PK + t * FM_PK, t);   /* the FM patches */
+    q += SONG_PK + FM_ALL;
+    for (t = 0; t < NT; t++) q = pk_xt(q, t);   /* the extras */
+    q[0] = (uint8_t)clamp(dr_mood, 0, NDMOOD - 1), q[1] = (uint8_t)clamp(dr_dens, 1, 8);   /* DREAM's */
+    q[2] = (uint8_t)clamp(dr_evol, 0, 1), q[3] = (uint8_t)clamp(dr_drft, 1, 8);
 }
 enum { UW_GLOBALS = 1, UW_CHAIN = 2 };
 static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: UW_GLOBALS, the effects, tempo, slot,
                                                  * SCALE, MODE, mutes too; UW_CHAIN, the song's chain too; vs: its
                                                  * version's row of OBJ_VERS, the sizes) */
 {
-    uint32_t t, k, tn = vs[1], sg = vs[2], sq = vs[3], lk = vs[4], fm = vs[5];
+    uint32_t t, k, tn = vs[1], sg = vs[2], sq = vs[3], lk = vs[4], fm = vs[5], xt = vs[6];
     int globals = (f & UW_GLOBALS) != 0;
     for (t = 0; t < NT; t++) q = uk_track(q, t, 0, tn);
     if (globals) {
@@ -552,6 +587,14 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
     for (t = 0; t < NT; t++) q = uk_seq(q, t, sq);
     for (t = 0; t < NT; t++) q = uk_lock(q, t, lk);
     for (t = 0; t < NT; t++) uk_fm(fm ? q + sg + t * FM_PK : 0, t);   /* (saved before them: the PATCH as built) */
+    {
+        const uint8_t *x = xt ? q + sg + fm : 0;
+        for (t = 0; t < NT; t++) x = uk_xt(x, t);   /* (saved before them: VELOCITY 127, CANON OFF) */
+        if (globals) {
+            dr_mood = x ? clamp(x[0], 0, NDMOOD - 1) : DM_MAQAM, dr_dens = x ? clamp(x[1], 1, 8) : 5;
+            dr_evol = x ? clamp(x[2], 0, 1) : 0, dr_drft = x ? clamp(x[3], 1, 8) : 4;
+        }
+    }
     if (!sg) return;                            /* (saved before the song: as it is) */
     if (f & UW_CHAIN)
         for (k = 0; k < SONG_N; k++) song_pat[k] = clamp(q[k] & 7u, 0, SONG_END), song_rep[k] = (q[k] >> 3 & 15u) + 1u;
@@ -569,6 +612,8 @@ static void pk_slot(uint8_t *q)                 /* the four tracks, their sequen
     for (t = 0; t < NT; t++) q = pk_seq(q, t);
     for (t = 0; t < NT; t++) q = pk_lock(q, t);
     for (t = 0; t < NT; t++) pk_fm(q + t * FM_PK, t);   /* (its FM patches: SLOT_PK on) */
+    q += FM_ALL;
+    for (t = 0; t < NT; t++) q = pk_xt(q, t);   /* (its extras: after them) */
 }
 static void uk_slot(const uint8_t *q, int isr)
 {
@@ -578,6 +623,8 @@ static void uk_slot(const uint8_t *q, int isr)
     for (t = 0; t < NT; t++) q = uk_seq(q, t, SEQ_PK);
     for (t = 0; t < NT; t++) q = uk_lock(q, t, LOCK_PK);
     for (t = 0; t < NT; t++) uk_fm(q + t * FM_PK, t);
+    q += FM_ALL;
+    for (t = 0; t < NT; t++) q = uk_xt(q, t);
 }
 
 /* ---- the objects: WORK and SLOTS, each in a pair of sectors, the newer copy good */
@@ -602,7 +649,7 @@ static const uint8_t *obj_find(uint32_t type, const uint16_t **vs, uint32_t *s_o
     uint32_t v;
     for (v = type == OBJ_SLOTS ? 2u : 0u; v < NOBJV; v++) {
         const uint16_t *r = OBJ_VERS[v];
-        uint32_t len = type == OBJ_WORK ? WORK_LEN(r[1], r[2], r[3], r[4], r[5]) : 4u * SLOT_LEN(r[1], r[3], r[4]);
+        uint32_t len = type == OBJ_WORK ? WORK_LEN(r[1], r[2], r[3], r[4], r[5], r[6]) : 4u * SLOT_LEN(r[1], r[3], r[4]);
         const uint8_t *f = obj_newest(type, len, r[0], s_out);
         if (f) { *vs = r; return f; }
     }
@@ -627,7 +674,8 @@ static int obj_save(uint32_t type, uint32_t len)
     obj_crc[type] = c;
     return 0;
 }
-/* ---- the slots' stream: slot k at bytes k x SLOT_PK on, its FM patches at 4 x SLOT_PK + k x FM_ALL on; sector i (SAVE
+/* ---- the slots' stream: slot k at bytes k x SLOT_PK on, its FM patches at 4 x SLOT_PK + k x FM_ALL on, its extras at
+ * 4 x (SLOT_PK + FM_ALL) + k x XT_ALL on; sector i (SAVE
  * sector 3 + i) its bytes i x SLS_P on; each sector: a header (SLS_MAGIC, a count, its index, the version, SLS_P), its
  * bytes, its CRC */
 static uint32_t sls_gen;
@@ -635,9 +683,14 @@ static uint8_t *sls_byte(uint32_t b)            /* the slot byte at stream byte 
 {
     if (b < 4u * SLOT_PK) return &slots[b / SLOT_PK][b % SLOT_PK];
     b -= 4u * SLOT_PK;
-    return b < 4u * FM_ALL ? &slots[b / FM_ALL][SLOT_PK + b % FM_ALL] : 0;
+    if (b < 4u * FM_ALL) return &slots[b / FM_ALL][SLOT_PK + b % FM_ALL];
+    b -= 4u * FM_ALL;
+    return b < 4u * XT_ALL ? &slots[b / XT_ALL][SLOT_PK + FM_ALL + b % XT_ALL] : 0;
 }
 static uint32_t sls_fm(uint32_t k) { return (4u * SLOT_PK + k * FM_ALL) / SLS_P; }   /* slot k's FM patches' sector */
+#define XT_AT(k) (4u * (SLOT_PK + FM_ALL) + (k) * XT_ALL)   /* slot k's extras in the stream */
+static uint32_t sls_xt(uint32_t k) { return 1u << XT_AT(k) / SLS_P | 1u << (XT_AT(k) + XT_ALL - 1u) / SLS_P; }   /* ..
+                                                 * their sectors (bit i) */
 static const uint8_t *sls_ok(uint32_t i)        /* sector i, good (its CRC), or 0 */
 {
     const uint8_t *f = save_flash(3u + i);
@@ -677,7 +730,7 @@ static int slots_save(void)                     /* the slots changed, their sect
     static const uint8_t ORD[2][SLS_N] = {{2, 1, 0}, {2, 0, 1}};   /* (the old newest in sector 3 + 0, or + 1) */
     uint32_t m = 0, k, n;
     for (k = 0; k < 4u; k++)
-        if (slot_dirty >> k & 1u) m |= sls_of(k) | 1u << sls_fm(k);
+        if (slot_dirty >> k & 1u) m |= sls_of(k) | 1u << sls_fm(k) | sls_xt(k);
     for (n = 0; n < SLS_N; n++) {
         uint32_t i = slot_up ? ORD[slot_up == 3u ? 0 : 1][n] : n;
         if ((m >> i & 1u) && sls_write(i)) return -1;
@@ -759,6 +812,10 @@ static void store_boot(void)                    /* power-on: the newest good cop
             uint32_t sb = 4u * SLOT_PK + k * FM_ALL + b;
             slots[k][SLOT_PK + b] = good >> sls_fm(k) & 1u ? save_flash(3u + sb / SLS_P)[OBJ_HDR + sb % SLS_P] : 0u;
         }
+        for (b = 0; b < XT_ALL; b++) {           /* its extras (their sector not good: none, VELOCITY 127, CANON OFF) */
+            uint32_t sb = XT_AT(k) + b;
+            slots[k][SLOT_PK + FM_ALL + b] = good >> (sb / SLS_P) & 1u ? save_flash(3u + sb / SLS_P)[OBJ_HDR + sb % SLS_P] : 0u;
+        }
     }
 }
 
@@ -801,6 +858,7 @@ static void project_new(void)                   /* NEW: the four tracks' power-o
         trk[t].arp_oct = T0.arp_oct, trk[t].arp_gate = T0.arp_gate;
         trk[t].lfo_rate = T0.lfo_rate, trk[t].lfo_depth = T0.lfo_depth, trk[t].lfo_dest = T0.lfo_dest;
         trk[t].lfo_shape = T0.lfo_shape;
+        trk[t].canon = 0;
         fm_builtin(t, T0.p[ENG_FM][0]);
         if (trk[t].eng != T0.eng) {
             trk[t].eng = T0.eng;

@@ -128,7 +128,8 @@ static void ui_head_text(void)
     if (page == PG_SOUNDS) put_u(put_s(ui_hr, "T"), sel + 1u);   /* (Save: the track) */
     else if (page == PG_PROJECTS) ui_hr[0] = (char)('A' + (slot_cur & 3)), ui_hr[1] = 0;   /* (the slot in use) */
     else if (ge_freeze && P->btn == BTN_FX) put_s(ui_hr, "FREEZE");
-    else if (page == PG_GRID) put_s(put_u(ui_hr, (uint32_t)seq_steps(&seq[sel])), " ST");   /* (Seq: the steps) */
+    else if (page == PG_GRID || page == PG_STEP) put_s(put_u(ui_hr, (uint32_t)seq_steps(&seq[sel])), " ST");   /* (Seq:
+                                                 * the steps) */
     else if (page == PG_HOME) put_u(put_s(ui_hr, "> "), (uint32_t)clamp(seq_bpm, 20, 300));   /* (Main: the tempo) */
     else if (P->btn == BTN_SEL) put_u(put_s(ui_hr, "T"), sel + 1u);
     else if (page == PG_ARP) put_s(ui_hr, trk[sel].latch ? "LATCH" : "");   /* (Arp: LATCH, if on) */
@@ -284,6 +285,7 @@ static void ui_slab_make(uint32_t k, slab_t *S)
     S->val[0] = 0;
     ui_label(S->lab, name[0] ? name : "-");
     if (page == PG_GRID && k == 3u) put_s(S->lab, "LEN");   /* (Seq's; SAMPLE keeps its LENGTH) */
+    if (page == PG_STEP && k == 0u) put_s(S->lab, "VEL");
     if (!PAGES[page].built) {                   /* (named, nothing behind it yet) */
         S->fill = 0;
         S->dim = 1;
@@ -318,8 +320,17 @@ static void ui_slab_make(uint32_t k, slab_t *S)
         else if (v) S->fill = (uint8_t)(2 * v), put_s(put_u(S->val, SCR_S[clamp(v, 0, 4)] / 60u), "M");
         else S->fill = 8, put_s(S->val, "NVR");
         return;
-    case PG_SYS2: put_s(S->val, k == 2u ? (v ? "RESTORE" : "KEEP") : k ? (v ? "ON" : "OFF") : v == LEARN_CLEAR ? "CLEAR" :
+    case PG_SYS2:
+        if (k == 3u) { put_s(S->val, VEL_SHORT[clamp(v, 0, 3)]); return; }   /* (VELOCITY) */
+        put_s(S->val, k == 2u ? (v ? "RESTORE" : "KEEP") : k ? (v ? "ON" : "OFF") : v == LEARN_CLEAR ? "CLEAR" :
                         LEARN_NAME[clamp(v, 0, 2)]); return;
+    case PG_STEP: ui_3(S->val, (uint32_t)clamp(v, 1, 127)); return;
+    case PG_CANON: put_s(S->val, CANON_NAME[clamp(v, 0, NCANON - 1)]); return;
+    case PG_DREAM:
+        if (k == 0u) put_s(S->val, DMOOD_SHORT[clamp(v, 0, NDMOOD - 1)]);
+        else if (k == 2u) put_s(S->val, v ? "ON" : "OFF");
+        else put_u(S->val, (uint32_t)clamp(v, 1, 8));
+        return;
     case PG_SOUNDS:
         if (k == 0u) { ui_3(S->val, (uint32_t)v + 1u); return; }
         if (k == 1u) { ui_squeeze(S->val, CAT_NAME[clamp(v, 0, NCAT - 1)]); return; }
@@ -1167,8 +1178,9 @@ static void pic_grid(void)                      /* Seq: the 64 steps of the trac
     if (pos >= 0 && seq_on) put_u(put_s(put_u(st, (uint32_t)pos + 1u), "/"), (uint32_t)n);
     else put_u(put_s(st, "-/"), (uint32_t)n);
     ui_text(148, 71, st, 1, UI_L);
-    put_u(put_s(st, "BPM "), (uint32_t)clamp(seq_bpm, 20, 300));
-    ui_text(148, 83, st, 1, UI_L);
+    if (page == PG_STEP) put_u(put_s(st, "VEL "), (uint32_t)clamp(P->st[cur].vel, 1, 127));   /* (STEP: its VELOCITY) */
+    else put_u(put_s(st, "BPM "), (uint32_t)clamp(seq_bpm, 20, 300));
+    ui_text(148, 83, st, 1, page == PG_STEP ? ui_acc : UI_L);
     put_u(put_s(st, "STEPS "), (uint32_t)n);
     ui_text(148, 93, st, 1, UI_L);
     if (P->st[cur].note && P->st[cur].chord) {   /* the selected step's chord: a chord step's own, "CHORD Cm7" */
@@ -1530,6 +1542,45 @@ static void pic_sys2(void)
 
 static void pic_notbuilt(void) { ui_text(120 - 4 * 13, 96, "NOT BUILT YET", 1, UI_M); }
 
+static void pic_canon(void)                     /* Canon: the second playhead: how far behind, which way, at what */
+{
+    int32_t mode = clamp(trk[sel].canon, 0, NCANON - 1), n = seq_steps(&seq[sel]), b = n / 2 ? n / 2 : 1, pos = seq[sel].pos;
+    char l[32];
+    ui_caption("CANON: SECOND PLAYHEAD", 0);
+    ui_text(120 - 8 * ui_len(CANON_NAME[mode]), 52, CANON_NAME[mode], 2, mode ? ui_acc : UI_M);
+    if (!mode) { ui_text(PX0, 84, "THE PATTERN ONCE: OFF", 1, UI_M); return; }
+    put_u(put_s(l, "STEPS BEHIND: "), (uint32_t)b);
+    ui_text(PX0, 84, l, 1, UI_L);
+    ui_text(PX0, 96, mode >= CANON_REV ? "BACKWARDS FROM THE END" : "FORWARDS, AS THE FIRST", 1, UI_L);
+    ui_text(PX0, 108, CANON_STEP[mode] == CANON_OCT || CANON_STEP[mode] == -CANON_OCT ? "AN OCTAVE: 12 SEMITONES" :
+            "SCALE DEGREES OF THE MAQAM", 1, UI_M);
+    ui_text(PX0, 120, "3/4 VELOCITY, STEP LENGTH", 1, UI_M);
+    if (pos >= 0 && seq_on) {                   /* the step each plays now */
+        int32_t c = mode >= CANON_REV ? n - 1 - pos : pos;
+        c = (c + n - b) % n;
+        put_u(put_s(put_u(put_s(l, "PLAYING "), (uint32_t)pos + 1u), "  CANON "), (uint32_t)c + 1u);
+        ui_text(PX0, 140, l, 1, UI_W);
+    }
+}
+static const char *dream_said(void);            /* (dream.c) */
+static uint32_t dream_role(uint32_t t);
+static void pic_dream(void)                     /* Dream: a key composes; the last piece; the parts the tracks play */
+{
+    static const char *const ROLE[6] = {"DRONE", "BASS", "PAD", "PLUCKED", "MELODY", "HIGH"};
+    const char *d = dream_said();
+    char l[32];
+    uint32_t t;
+    ui_caption("DREAM", playing ? "PLAYING" : "");
+    ui_text(120 - 4 * (d[0] ? 8 : 11), 46, d[0] ? "DREAMING" : "PRESS A KEY", 1, UI_M);
+    if (d[0]) ui_text(120 - 8 * ui_len(d), 58, d, 2, ui_acc);
+    else ui_text(120 - 4 * 18, 62, "A PIECE IN ITS KEY", 1, UI_L);
+    for (t = 0; t < NT; t++) {
+        put_s(put_s(put_u(put_s(l, "T"), t + 1u), "  "), ROLE[dream_role(t) % 6u]);
+        ui_text(PX0, 92 + (int32_t)t * 12, l, 1, (trk_mute >> t & 1u) ? UI_M : UI_L);
+    }
+    ui_text(PX0, 146, dr_mood == DM_MAQAM ? "MAQAM: THE TRACK TUNING" : "MOOD: ITS SCALE", 1, UI_M);
+}
+
 static void ui_pic_draw(void)
 {
     switch (page) {
@@ -1553,7 +1604,9 @@ static void ui_pic_draw(void)
     case PG_GRAIN: pic_grain(); return;
     case PG_DELAY: pic_delay(); return;
     case PG_SPACE: pic_space(); return;
-    case PG_GRID: pic_grid(); return;
+    case PG_GRID: case PG_STEP: pic_grid(); return;
+    case PG_CANON: pic_canon(); return;
+    case PG_DREAM: pic_dream(); return;
     case PG_PATTERN: pic_pattern(); return;
     case PG_SCALE: case PG_CHORD: case PG_TUNE1: case PG_TUNE2: case PG_TUNE3: case PG_TUNING: case PG_TASH1: case PG_TASH2: case PG_TASH3: pic_sel(); return;
     case PG_ARP: pic_arp(); return;
@@ -1592,6 +1645,13 @@ static uint32_t ui_pic_key(void)
         for (k = 0; k < SONG_N; k++) UI_H(song_pat[k]), UI_H(song_rep[k]);
         for (k = 0; k < 16u; k++) UI_H(slot_has(k >> 2, k & 3u));
     }
+    if (page == PG_CANON) UI_H(trk[sel].canon), UI_H(seq[sel].pos), UI_H(seq[sel].steps), UI_H(seq_on);
+    if (page == PG_DREAM) {                     /* the piece, the parts, the mutes */
+        const char *d = dream_said();
+        UI_H(dr_mood), UI_H(playing), UI_H(trk_mute);
+        for (k = 0; d[k]; k++) UI_H(d[k]);
+        for (t = 0; t < NT; t++) UI_H(dream_role(t)), UI_H(trk[t].eng);
+    }
     if (page == PG_ARP) {                       /* the list, the step playing */
         UI_H(trk[sel].arp), UI_H(arp[sel].n), UI_H(arp[sel].last), UI_H(trk[sel].latch);
         for (k = 0; k < ARP_N; k++) UI_H(arp[sel].note[k]), UI_H(arp[sel].id[k]);
@@ -1606,7 +1666,7 @@ static uint32_t ui_pic_key(void)
     }
     if (page == PG_TAPE) UI_H(tf_wow), UI_H(tf_sat), UI_H(tf_tone), UI_H(tf_hiss);
     if (page == PG_SYSTEM || page == PG_SYS2) { /* the settings, the links */
-        UI_H(set.col), UI_H(set.mch), UI_H(set.tune), UI_H(set.scr), UI_H(set.out), UI_H(set.nlk);
+        UI_H(set.col), UI_H(set.mch), UI_H(set.tune), UI_H(set.scr), UI_H(set.out), UI_H(set.nlk), UI_H(set.vel);
         for (k = 0; k < NLINK * 5u; k++) UI_H(set.lk[k / 5u][k % 5u]);
     }
     if (PAGES[page].btn == BTN_SEQ) {           /* the pattern, its settings, the cursor, the step playing */
@@ -1616,7 +1676,7 @@ static uint32_t ui_pic_key(void)
         UI_H(seq_bpm);
         for (k = 0; k < SEQ_N; k++)
             UI_H(P->st[k].note), UI_H(P->st[k].chance), UI_H(P->st[k].ratchet), UI_H(P->st[k].len),
-                UI_H(P->st[k].chord), UI_H(P->st[k].lmask);
+                UI_H(P->st[k].chord), UI_H(P->st[k].lmask), UI_H(P->st[k].vel);
     }
 #undef UI_H
     return h;

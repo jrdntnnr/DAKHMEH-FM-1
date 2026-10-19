@@ -413,6 +413,7 @@ void fm1_cstart(void)
     lcd_fill(0, 0, 240, 240, C_BLACK);
     fm1_input_init();
     fm1_adc_init();
+    fm1_adc_owned = 1;                          /* (from here only the scan converts: MASTER, the battery cached) */
     fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3);   /* (abuf is zero: .bss) */
     usb_start();
     fm1_timer5_start(isr_timer5, 4);

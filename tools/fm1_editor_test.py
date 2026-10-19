@@ -121,9 +121,10 @@ def load(path, inf):
     b = json.loads(Path(path).read_text())
     if b.get("format") != "grimm-backup" or b.get("version") != 1:
         sys.exit(f"{path}: not a GR!MM backup")
-    if b.get("fmt") != inf["fmt"]:
+    legacy = b.get("fmt") == 3 and inf["fmt"] == 4   # (format 4 added DAKHMEH's extras: a format 3 backup restores)
+    if b.get("fmt") != inf["fmt"] and not legacy:
         sys.exit(f"{path}: object format {b.get('fmt')}, the FM-1's is {inf['fmt']}")
-    sizes = {o: s for o, s, _ in objects(inf)}
+    sizes = {o: s - (legacy and (1 if o == 0 else 4 * 68 if 1 <= o <= 4 else 0)) for o, s, _ in objects(inf)}
     for ob in b["objects"]:
         d = base64.b64decode(ob["data"])
         if ob["id"] not in sizes or len(d) != sizes[ob["id"]] or zlib.crc32(d) != ob["crc"]:
@@ -135,7 +136,7 @@ def restore(link, b, inf):
     whats = {o: w for o, _, w in objects(inf)}
     for ob in b["objects"]:
         print(f"\r  writing {whats[ob['id']]:<12}", end="", flush=True)
-        put(link, ob["id"], base64.b64decode(ob["data"]), inf["fmt"], whats[ob["id"]])
+        put(link, ob["id"], base64.b64decode(ob["data"]), b.get("fmt", inf["fmt"]), whats[ob["id"]])
     print("\r  written: settings, slots A-D, " + f"{inf['sounds']} sounds          ")
 
 

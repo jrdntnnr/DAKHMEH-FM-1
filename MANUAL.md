@@ -162,10 +162,24 @@ With chord mode on, one key plays the whole chord. Big chords use more of the si
 |---|---|---|---|
 | MODE | RATE | OCTAVES (1–4) | GATE |
 
-- **Modes:** UP, DOWN, UP-DOWN, RANDOM, AS PLAYED, CHORD
+- **Modes:** UP, DOWN, UP-DOWN, RANDOM, AS PLAYED, CHORD, TRILL, DRONE
+- **TRILL:** each held note, then its upper neighbour in the track's scale (on BAYATI, the half-flat E over D; on CHR, a semitone). RATE 1/32 makes a trill, 1/16 a slow one; a short GATE makes it flutter.
+- **DRONE:** the lowest key held keeps sounding, like a tanbur's open string, while the other keys arpeggiate UP over it (with OCTAVES). The drone moves when the lowest key changes and ends with the keys. GATE shapes only the notes above it. Best on a sustaining sound.
 - **Rates:** 1/1 to 1/32, plus triplets
 - It plays the keys you hold (with chord mode: whole chords). With **LATCH ON** it keeps running after you let go; press a key again to take it out.
 - It follows the sequencer's clock when playing, otherwise the tempo.
+- Its notes play at the velocity of the last key (or MIDI note) that went into it.
+
+**CANON** (press ARP again): a second playhead for the selected track's sequence, half the pattern behind.
+
+| KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|
+| CANON | | | |
+
+- **3RD, 5TH, 7TH** count steps of the track's scale (on BAYATI, a 3RD over D is F; over the half-flat E it is G). **OCT** is twelve semitones. The minus settings go down.
+- **R 3RD … R −OCT** play the pattern backwards from its last step: a crab canon.
+- The answer plays each step's note (a chord step: its chord) for the step's LENGTH at three quarters of its velocity. CHANCE, RATCHET and step locks belong to the first playhead. An OFF step plays nothing new.
+- Saved with the project and the slots; older projects load OFF.
 
 ---
 
@@ -175,13 +189,19 @@ Every track has its own 64-step pattern. All four play together on one tempo.
 
 ![The 64-step grid](docs/screens/seq.png)
 
-**SEQ** opens **GRID → PATTERN SETTINGS**. **PLAY/STOP** starts and stops. **REC** records.
+**SEQ** opens **GRID → STEP → PATTERN SETTINGS**. **PLAY/STOP** starts and stops. **REC** records.
 
 **GRID** (the selected step):
 
 | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|
 | NOTE (all the way down = OFF) | CHANCE | RATCHET (1–4 hits) | LENGTH (in steps) |
+
+**STEP** (the selected step; the panel shows `VEL`):
+
+| KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|
+| VELOCITY (1–127) | | | |
 
 **PATTERN SETTINGS:**
 
@@ -197,6 +217,7 @@ Every track has its own 64-step pattern. All four play together on one tempo.
 - **Stopped + REC:** each key writes its note into the selected step and moves on.
 - **Playing + REC:** what you play lands on the nearest step.
 - With chord mode on, recorded steps keep their chord (shown in colour).
+- Each recorded step keeps the velocity it was played at (keys with SYSTEM 2's VELOCITY on, MIDI notes, the arp). Ratchets repeat it. Steps from older projects play at 127, as loud as before.
 
 **Step locks:** on the sequencer pages, **hold SEL** and the four knobs become the track's sound knobs. Turn one to lock that value to the selected step (a small mark appears). **Hold SEL + OCT−** clears the step's locks.
 
@@ -250,6 +271,22 @@ A saved sound is called by its category and number (`PAD 03`), or by the name yo
 
 **Mute and solo: hold GLO + a white key.** F3–B3 mute T1–T4, C4–F4 solo T1–T4.
 
+### DREAM: GLO again
+
+**DREAM** (press GLO on the SONG page) writes an ambient piece into all four tracks from their own sounds. On this page the keys do not play: **press a key** and DREAM composes in that key and starts playing.
+
+| KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|
+| MOOD | DENSITY (1–8) | EVOLVE (OFF/ON) | DRIFT (1–8) |
+
+- **MOOD MAQAM** (the default) uses the selected track's maqam and its whole tuning, including TUNING, TASHRIQ, the TUNE trims and a custom table, on all four tracks. MIN, DOR, PHRY, HARM, MAJ and MIX use that scale.
+- Each track gets a part that suits its sound: drone, bass, pad (scale triads, tuned like the maqam), plucked arpeggios, melody, or high notes. The picture shows which.
+- The piece is four chords over 64 steps at 1/8. Each track gets STEPS 64, DIVISION 1/8, and the key and scale. Chord mode and ARP are switched off. CANON stays as you set it.
+- **DENSITY** sets how much each part plays. The steps' CHANCE varies every pass, and their VELOCITY shapes the phrases.
+- **EVOLVE ON:** every 9 − DRIFT passes one thing changes: a chord, a phrase, or a part dropping out or coming back (its mute).
+- If the tracks already hold steps, the first key asks first (**AGAIN: DREAM OVER STEPS**): press the same key within 3 s. **Hold EDIT + OCT−** undoes it.
+- DREAM writes ordinary steps: edit them, save them in a slot. It does not run while a song mode is on.
+
 ---
 
 ## 9. Effects: FX
@@ -294,12 +331,13 @@ FREEZE is the exception: tap it to hold the grain cloud, tap again to release.
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 |---|---|---|---|---|
 | SYSTEM | COLOUR (red, amber, teal, violet) | MIDI CHANNEL | TUNE (±50 cents) | SCREEN OFF |
-| SYSTEM 2 | MIDI LEARN | SEQ MIDI OUT | SAMPLES | |
+| SYSTEM 2 | MIDI LEARN | SEQ MIDI OUT | SAMPLES | VELOCITY |
 
 - **MIDI CHANNEL:** `1-4` puts T1–T4 on channels 1–4 (or start higher, up to `13-16`); `ALL > SEL` sends every channel to the selected track.
 - **SCREEN OFF:** the screen goes dark after the chosen time; the music keeps going. Your first touch only wakes it.
 - **MIDI LEARN:** set LEARN, turn any knob on the FM-1, then move a knob on your controller. Up to 32 links. CLEAR ALL removes them (confirm with OCT+).
 - **SEQ MIDI OUT:** sends the sequencer's and arp's notes out over USB on each track's channel.
+- **VELOCITY:** FIXED (the default) plays every key at full velocity. SENSE LINEAR, SOFT and HARD read how hard each key lands and use that curve. A press waits up to 14 ms for its reading. With a button layer held (GLO, SAVE, SEQ, FX) keys play at once at full velocity. Incoming MIDI notes always use their own velocity.
 - **SAMPLES:** turn it to RESTORE and press **OCT+** to write the four factory samples back into all four sample slots (a few seconds; stop the sequencer and let the sound die out first). **OCT−** keeps your samples.
 - SYSTEM 2 also shows the processor load (CPU NOW / PEAK). OCT− + OCT+ together resets PEAK.
 
