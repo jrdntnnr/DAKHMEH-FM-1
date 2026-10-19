@@ -17,8 +17,8 @@
 #include "dakhmeh_wordmark.h"
 
 /* The palette: five steps, black (the background) to white, and the accent. COLOUR (SYSTEM) picks one of
- * UI_THEMES: GR!MM's warm greys with red, amber, teal or violet, or DESERT (SARDAB's: obsidian, deep stone,
- * stone, sandstone, bone, copper for the active thing). */
+ * UI_THEMES: GR!MM's warm greys with red, amber, teal or violet, or DESERT: night, dark earth, ochre, gold, bone, a
+ * hot copper for the active thing (saturated: the panel washes pale tones out). */
 #define UI_K ui_pal[0]                          /* black (the background) */
 #define UI_D ui_pal[1]                          /* dark */
 #define UI_M ui_pal[2]                          /* mid */
@@ -32,7 +32,7 @@ typedef struct { uint16_t pal[5], acc; } ui_theme_t;
 static const ui_theme_t UI_THEMES[UI_NTHEME] = {
     GRIMM_THEME(RGB(0xc8, 0x32, 0x1e)), GRIMM_THEME(RGB(0xd0, 0x8a, 0x1c)), GRIMM_THEME(RGB(0x2f, 0x8f, 0x8a)),
     GRIMM_THEME(RGB(0x7a, 0x4f, 0xb0)),
-    {{RGB(16, 21, 17), RGB(38, 43, 37), RGB(112, 104, 88), RGB(223, 181, 135), RGB(234, 223, 201)}, RGB(220, 145, 108)},
+    {{RGB(4, 6, 8), RGB(44, 34, 20), RGB(150, 104, 40), RGB(246, 184, 64), RGB(255, 244, 214)}, RGB(255, 88, 24)},
 };
 static uint16_t ui_pal[5] = {RGB(0x0b, 0x0b, 0x0a), RGB(0x26, 0x25, 0x1f), RGB(0x5e, 0x5b, 0x54), RGB(0xb8, 0xb4, 0xa9),
                              RGB(0xe8, 0xe4, 0xd8)};
