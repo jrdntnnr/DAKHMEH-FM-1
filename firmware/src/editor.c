@@ -101,7 +101,7 @@ static uint32_t ed_commit(uint32_t o)
         __typeof__(set) s;
         uint32_t i;
         memcpy(&s, ED_RX, sizeof s);
-        if (s.ver != SET_VER || s.oct < -2 || s.oct > 2 || s.tune < -50 || s.tune > 50 || s.col > 3u ||
+        if (s.ver != SET_VER || s.oct < -2 || s.oct > 2 || s.tune < -50 || s.tune > 50 || s.col >= NCOL ||
             s.mch > MCH_ALL || s.scr > 4u || s.out > 1u || s.nlk > NLINK || s.vel > 3u)
             return ER_BAD;
         for (i = 0; i < s.nlk; i++)

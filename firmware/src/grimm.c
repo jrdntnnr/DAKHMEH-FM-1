@@ -787,6 +787,7 @@ static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 
     }
 }
 static const char *knob_name(uint32_t pg, uint32_t k) { return pg == PG_SOUND ? sel_engine()->knob[k] : PAGES[pg].knob[k]; }
+#define NCOL 5                                  /* COLOUR: GR!MM's four accents, DESERT (ui.c UI_THEMES) */
 static int32_t knob_max(uint32_t pg, uint32_t k)
 {
     static const int32_t GRID_MAX[4] = {127, 100, 4, SEQ_N}, PATT_MAX[4] = {SEQ_N, 7, 127, SEQ_NMODE - 1};
@@ -798,7 +799,7 @@ static int32_t knob_max(uint32_t pg, uint32_t k)
            pg == PG_ARP ? (k == 0u ? NARPMODE - 1 : k == 1u ? NARPRATE - 1 : k == 2u ? 4 : 100) :
            pg == PG_LFO ? (k == 0u ? 127 : k == 1u ? 100 : k == 2u ? NLFODEST - 1 : NLFOSHAPE - 1) :
            pg == PG_SONG ? (k == 0u ? SONG_N - 1 : k == 1u ? SONG_END : k == 2u ? 16 : NSONGMODE - 1) :
-           pg == PG_SYSTEM ? (k == 0u ? 3 : k == 1u ? MCH_ALL : k == 2u ? 50 : 4) : pg == PG_SYS2 ? (k == 3u ? 3 : k ? 1 : 2) :
+           pg == PG_SYSTEM ? (k == 0u ? NCOL - 1 : k == 1u ? MCH_ALL : k == 2u ? 50 : 4) : pg == PG_SYS2 ? (k == 3u ? 3 : k ? 1 : 2) :
            pg == PG_HOME && k == 3u ? 200 : pg == PG_FMALGO ? (k == 0u ? 31 : k == 1u ? 7 : k == 2u ? 5 : 99) :
            pg == PG_FMOP ? (k ? 99 : 31) : 127;
 }
@@ -824,7 +825,7 @@ static const char *lfo_dest_name(int32_t d)     /* DESTINATION: its name (a knob
     d = clamp(d, 0, NLFODEST - 1);
     return d >= LD_K1 && d <= LD_K4 ? knob_name(PG_SOUND, (uint32_t)(d - LD_K1)) : LFO_DEST_NAME[d];
 }
-static const char *const COL_NAME[4] = {"RED", "AMBER", "TEAL", "VIOLET"};   /* SYSTEM: COLOUR */
+static const char *const COL_NAME[NCOL] = {"RED", "AMBER", "TEAL", "VIOLET", "DESERT"};   /* SYSTEM: COLOUR */
 static const char *const SCR_NAME[5] = {"NEVER", "1 MIN", "5 MIN", "15 MIN", "30 MIN"};   /* SCREEN OFF */
 static const char *const LEARN_NAME[3] = {"OFF", "LEARN", "CLEAR ALL"};   /* SYSTEM 2: MIDI LEARN */
 static const char *const VEL_NAME[4] = {"FIXED", "SENSE LINEAR", "SENSE SOFT", "SENSE HARD"};   /* SYSTEM 2: VELOCITY */
@@ -1266,7 +1267,7 @@ static void midi_out(void)
 static void sys_sync(void)
 {
     int8_t tn = (int8_t)clamp(sy_tune, -50, 50);
-    uint8_t col = (uint8_t)clamp(sy_col, 0, 3), mch = (uint8_t)clamp(sy_mch, 0, MCH_ALL), scr = (uint8_t)clamp(sy_scr, 0, 4);
+    uint8_t col = (uint8_t)clamp(sy_col, 0, NCOL - 1), mch = (uint8_t)clamp(sy_mch, 0, MCH_ALL), scr = (uint8_t)clamp(sy_scr, 0, 4);
     uint8_t out = (uint8_t)clamp(sy_out, 0, 1), vel = (uint8_t)clamp(sy_vel, 0, 3);
     uint32_t n, t;
     if (mch != set.mch || (set.out && !out)) mo_flush = 1;
@@ -1278,7 +1279,7 @@ static void sys_sync(void)
         set.tune = tn, set.col = col, set.mch = mch, set.scr = scr, set.out = out, set.vel = vel;
         set_dirty = 1, set_t = fm1_ms;
     }
-    ui_acc = UI_ACCENTS[set.col & 3u];
+    ui_theme_set(set.col);
     tune_f = (set.tune * 23666 + set.tune * set.tune * 7) / 10000;   /* (2^(c / 1200) - 1, x 4096) */
     mo_seq = set.out;
     kv_config = set.vel ? 1u | (set.vel - 1u) << 1 | 32u : 0u;   /* (SENSE, its curve, TOUCH NORMAL, the top keys probed:
@@ -1297,8 +1298,10 @@ static void sys_load(void)                      /* the settings at power-on into
     set.vel = 0;
     if (settings_load(&set, sizeof set) && settings_load(&set, sizeof set - 1u) && settings_load(&set, sizeof set - 2u)) {
         set.oct = settings_load(&o, 1) ? 0 : o;   /* (- 1: before VELOCITY; - 2: before ver too) */
-        set.tune = 0, set.col = set.mch = set.scr = set.out = set.nlk = 0;
+        set.tune = 0, set.mch = set.scr = set.out = set.nlk = 0;
+        set.col = UI_DESERT;                    /* (a fresh device: the desert's colours) */
     }
+    if (set.col >= NCOL) set.col = 0;
     if (set.vel > 3u) set.vel = 0;
     if (set.oct < -2 || set.oct > 2) set.oct = 0;
     if (set.nlk > NLINK) set.nlk = 0;
@@ -1511,7 +1514,7 @@ static void app_main(void)
 #endif
 
     for (;;) {
-        uint32_t keys, down, up, rel, b, n, lit = 0, base = (uint32_t)(KEY0 + 12 * set.oct);
+        uint32_t keys, down, up, rel, b, n, lit = 0, glow, base = (uint32_t)(KEY0 + 12 * set.oct);
         uint8_t st, d1, d2;
         int32_t d;
         platform_poll();
@@ -1825,12 +1828,40 @@ static void app_main(void)
             for (lit = 0, k = 0; k < 4u; k++) lit |= (uint32_t)slot_used(k) << WK[k];
         if (b_down >> BTN_FX & 1u)              /* (FX held: the eight tricks' keys glow; one on: lit) */
             for (k = 0; k < 8u; k++) lit |= (k ? pf_held >> (k - 1u) & 1u : ge_freeze & 1u) << WK[k];
+        glow = 0;
+        if (PAGES[page].btn == BTN_SEL) {       /* the maqam pages: the keys in the scale glow; the root's are lit, and
+                                                 * TASHRIQ's switched ones */
+            uint32_t root = (uint32_t)clamp(trk[sel].root, 0, 11);
+            for (k = 0; k < 27u; k++) {
+                if (!sc_in(sel, (int32_t)(base + k))) continue;
+                if ((base + k) % 12u == root || (trk[sel].tuning_mode && trk[sel].tash_on[(base + k) % 12u])) lit |= 1u << k;
+                else glow |= 1u << k;
+            }
+        }
+        if (page == PG_CANON && trk[sel].canon && seq_on && seq[sel].pos >= 0) {   /* CANON: the step its playhead is
+                                                 * at, its key glows */
+            int32_t ns = seq_steps(&seq[sel]), bh = ns / 2 ? ns / 2 : 1, c = trk[sel].canon >= CANON_REV ? ns - 1 - seq[sel].pos : seq[sel].pos;
+            uint32_t note = seq[sel].pat[clamp(seq[sel].cur, 0, SEQ_NPAT - 1)].st[(c + ns - bh) % ns].note;
+            if (note >= base && note < base + 27u) glow |= 1u << (note - base);
+        }
+        if (page == PG_DREAM && playing && dream_said()[0]) {   /* DREAM playing: the keys breathe (off, glow, lit, glow) */
+            uint32_t ph = fm1_ms % 2400u / 600u;
+            if (ph == 2u) lit |= 0x7FFFFFFu;
+            else if (ph & 1u) glow |= 0x7FFFFFFu;
+        }
+        if (fm1_ms - ui_boot_t < UI_BOOT_MS) {  /* the boot screen: a light runs the keys right to left, once, two
+                                                 * glowing behind it */
+            uint32_t at = (fm1_ms - ui_boot_t) * 31u / UI_BOOT_MS;   /* (0 .. 30: the head at key 26 - at) */
+            lit = glow = 0;
+            for (k = 0; k < 4u; k++)
+                if (26u + k >= at && 26u + k - at < 27u) *(k < 2u ? &lit : &glow) |= 1u << (26u + k - at);
+        }
         for (k = 0; k < 27u; k++) {
             uint32_t wk;
             for (wk = 0; wk < 8u && WK[wk] != k; wk++)
                 ;
             fm1_led_key(KEY_LED(k), lit >> k & 1u);
-            fm1_led_glow(KEY_LED(k), wk < 8u && (b_down >> BTN_FX & 1u));
+            fm1_led_glow(KEY_LED(k), (wk < 8u && (b_down >> BTN_FX & 1u)) || (glow >> k & 1u));
         }
         fm1_led_key(BTN_OCT_DOWN, set.oct < 0);
         fm1_led_key(BTN_OCT_UP, set.oct > 0);

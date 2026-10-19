@@ -15,6 +15,7 @@ int main(void)
     uint32_t k; int32_t audio[2*VB];
     memset(fake_flash,0xff,sizeof fake_flash);
     ima_init();seq_init();
+    set.col=UI_DESERT;sy_col=UI_DESERT;ui_theme_set(UI_DESERT);   /* the desert's colours (a fresh device's) */
     ui_boot();write_ppm_as("build/screens/splash.ppm");
     fm1_ms=4000;
     snd_apply(SND_FACTORY[40],0);brw_at(0,SND_FACTORY[40]);
@@ -22,6 +23,16 @@ int main(void)
     note_on(0,7,60,SRC_KEY,0,-1,127);
     for(k=0;k<100;k++)app_audio(audio,VB);
     shot("desert-oud",PG_SOUND);
+    trk[1].level=90;trk[2].level=60;trk[3].level=110;shot("home",PG_HOME);
+    shot("mixer",PG_MIX1);                       /* (its meters: the peaks since the page opened) */
+    note_on(0,7,60,SRC_KEY,0,-1,127);note_on(1,9,62,SRC_KEY,0,-1,100);
+    for(k=0;k<12;k++)app_audio(audio,VB);
+    shot("mixer",PG_MIX1);
+    note_off(0,7,SRC_KEY,0);note_off(1,9,SRC_KEY,0);
+    trk[0].scale=23;shot("scroll-a",PG_SCALE);   /* HIJAZKAR: the SCALE slab scrolls (build/screens only) */
+    fm1_ms+=UI_SCROLL_MS*4;shot("scroll-b",PG_SCALE);
+    trk[0].scale=16;
+    shot("colour",PG_SYSTEM);
     note_off(0,7,SRC_KEY,0);
     note_on(0,11,64,SRC_KEY,0,-1,127);
     ch_last=64;shot("maqam-rast",PG_SCALE);

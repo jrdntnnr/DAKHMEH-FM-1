@@ -193,7 +193,25 @@ imports remain excluded.
 ## DAKHMEH rebrand
 
 Persian دخمه splash, DAKHMEH application/editor labels and package filenames.
-Ten current firmware captures (including STEP velocity, CANON and DREAM) are in `docs/screens/dakhmeh/`. The browser
+Thirteen current firmware captures (including HOME, MIXER, COLOUR, STEP velocity, CANON and DREAM) are in `docs/screens/dakhmeh/`. The browser
 also retains upstream `30aa882` (MIDI input device selection). Native/WASM
 and tuning tests passed after rebranding. Compatibility format identifiers
 (`grimm-backup`, `grimm-sound`, `sardab-tuning`) remain readable unchanged.
+
+### The desert look (after 0.3)
+
+- **COLOUR DESERT** (SYSTEM): SARDAB's palette, obsidian to bone with copper for the active thing, as a fifth
+  theme beside GR!MM's four accents; a fresh device starts on it, a saved COLOUR is kept. The editor accepts
+  settings with COLOUR 0..4 (`editor.c`).
+- **HOME**: a night over the dunes. The stars sparkle with the output; a lantern a track burns with its level and
+  peak (muted or LEVEL 0: dark glass). GR!MM's eye and candles are gone. Drawn as before: a frame every
+  `UI_ANIM_MS`, only the cells that changed (`ui_home_frame`).
+- **Tuning rail** (SCALE, CHORD, TUNE, TUNING, TASHRIQ): under the keys, a datum with every in-scale key's cents off
+  12-TET as a tick (up sharp, down flat, 3 px a hundred cents, a dot in tune) and the root as a diamond.
+- **MIXER meters**: a meter beside each track's column, its peak before LEVEL on a log scale (12 px a doubling), a
+  frame every `UI_ANIM_MS` (`ui_meter_frame`).
+- **Scrolling names**: a slab value whose full text (`knob_text`) is longer than its six characters scrolls it,
+  held at each end (`ui_window`, `UI_SCROLL_MS`); so does the header's left text when cut.
+- **Key lights**: the maqam pages glow the keys in the scale and light the root's and TASHRIQ's switched keys;
+  CANON glows the key of the step its playhead is at; DREAM playing breathes all keys (off, glow, lit, glow, 2.4 s);
+  at boot a light runs the keys right to left once, two glowing behind it.

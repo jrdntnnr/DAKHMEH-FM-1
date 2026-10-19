@@ -31,7 +31,7 @@ Custom firmware for the **M-VAVE FM-1**, built on [GR!MM](https://github.com/GRi
 | DREAM | none | Press a key to compose an ambient piece across all four tracks. MOOD MAQAM carries the selected track's maqam and tuning (GLO's second page) |
 | Arp modes | UP, DOWN, UP-DOWN, RANDOM, AS PLAYED, CHORD | Adds TRILL (each note, then its scale neighbour up) and DRONE (the lowest key keeps sounding) |
 | Install | command line | [Browser installer](https://jrdntnnr.github.io/DAKHMEH-FM-1/install.html) as well as `tools/fm1_install.py` |
-| Look | GR!MM | Persian دخمه splash and DAKHMEH branding; GR!MM's screens otherwise |
+| Look | GR!MM's warm greys, red accent; HOME: stars, an eye, candles | DESERT colours (obsidian, sandstone, bone, copper) as a fifth COLOUR and a fresh device's; HOME: a night over the dunes, a lantern a track burning with it; a tuning rail under the maqam keyboard (the root a diamond, each degree's cents); MIXER meters; names too long for their place scroll; the keys light the scale on the maqam pages, breathe while DREAM plays, follow CANON, and a light runs them at boot |
 
 Most of the maqam, tuning and desert work, velocity, CANON, DREAM, TRILL and DRONE come from SARDAB (GHOULBOX on Felucca).
 
@@ -41,7 +41,7 @@ Most of the maqam, tuning and desert work, velocity, CANON, DREAM, TRILL and DRO
 - **[Installer](https://jrdntnnr.github.io/DAKHMEH-FM-1/install.html)**: Chrome or Edge, FM-1 connected by USB. Back up first with the [editor](https://jrdntnnr.github.io/DAKHMEH-FM-1/editor.html).
 - **[Releases](https://github.com/jrdntnnr/DAKHMEH-FM-1/releases)**: the `.fwsc` package for `tools/fm1_install.py`.
 
-**Pre-release (0.3).** The target build, emulator and installer tests pass. Nothing has been tested on hardware yet, including velocity sensing. Existing SARDAB projects need conversion.
+**Pre-release (0.3).** The target build, emulator and installer tests pass. 0.3 runs on an FM-1 (2026-10-19); velocity sensing is untested there. Existing SARDAB projects need conversion.
 
 [Controls & status](docs/PORT.md) · [Build & run](docs/BUILDING.md) · [Screenshots](docs/screens/dakhmeh/README.md) · [Instrument sources](assets/desert/README.md)
 
