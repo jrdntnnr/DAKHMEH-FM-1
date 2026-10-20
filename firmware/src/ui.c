@@ -479,7 +479,7 @@ static void ui_slab_fill(uint32_t k, slab_t *S)
             else { put_x10(S->val, RV_RT60_X10[clamp(v, 0, 126)]); put_s(S->val + ui_len(S->val), "S"); }
             return;
         }
-        if (k == 3u) { put_s(put_u(S->val, ((uint32_t)v * 250u + 63u) / 127u), "MS"); return; }
+        if (k == 3u) { put_s(put_u(S->val, rv_pre_ms(v)), "MS"); return; }
         break;
     default: break;
     }

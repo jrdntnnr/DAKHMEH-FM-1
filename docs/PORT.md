@@ -254,3 +254,5 @@ and tuning tests passed after rebranding. Compatibility format identifiers
   46 ms, instead of a glide that read the tape at 20 x), VOICE's knobs (they glide, ~3 ms), PHYS (the old model
   fades out before the new is struck; STRUCTURE, DAMP and BOW glide). PHYS's MODEL strike and STRUCTURE's retuning
   are transients by design and exempt.
+- **PRE-DELAY's text** (0.5.1) follows the TYPE: HALL's 0 .. 250 ms, the plate family's 0 .. 54 (CAVERN and
+  SHIMMER 18 more).

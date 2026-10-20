@@ -933,7 +933,7 @@ static void knob_text(uint32_t pg, uint32_t k, char *s)   /* knob k's value on p
             else put_s(put_x10(s, RV_RT60_X10[clamp(v, 0, 126)]), " s");
             return;
         case 2: put_pc(s, v); return;
-        case 3: put_s(put_u(s, ((uint32_t)v * 250u + 63u) / 127u), " ms"); return;
+        case 3: put_s(put_u(s, rv_pre_ms(v)), " ms"); return;
         default: put_u(s, (uint32_t)v); return;
         }
     }

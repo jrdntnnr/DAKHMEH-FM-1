@@ -44,7 +44,7 @@ Most of the maqam, tuning and desert work, velocity, CANON, DREAM, TRILL and DRO
 - **[Installer](https://jrdntnnr.github.io/DAKHMEH-FM-1/install.html)**: Chrome or Edge, FM-1 connected by USB. Back up first with the [editor](https://jrdntnnr.github.io/DAKHMEH-FM-1/editor.html).
 - **[Releases](https://github.com/jrdntnnr/DAKHMEH-FM-1/releases)**: the `.fwsc` package for `tools/fm1_install.py`.
 
-**Pre-release (0.5).** The target build, emulator and installer tests pass. 0.4.2 ran on an FM-1; the second core has not: it is started at power-on, proved with a self-test and, should it fail or run late, the FM-1 falls back to one core (SYSTEM's header says 2C or 1C). Existing SARDAB projects need conversion.
+**Pre-release (0.5.1).** The target build, emulator and installer tests pass. 0.4.2 ran on an FM-1; the second core has not: it is started at power-on, proved with a self-test and, should it fail or run late, the FM-1 falls back to one core (SYSTEM's header says 2C or 1C). Existing SARDAB projects need conversion.
 
 [Controls & status](docs/PORT.md) · [Build & run](docs/BUILDING.md) · [Screenshots](docs/screens/dakhmeh/README.md) · [Instrument sources](assets/desert/README.md)
 

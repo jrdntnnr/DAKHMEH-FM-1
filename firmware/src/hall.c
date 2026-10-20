@@ -111,6 +111,17 @@ static struct {                                 /* every type's: the send in, th
 static volatile int32_t rv_size = 80, rv_damp = 48, rv_mix = 100, rv_pre = 16;  /* 6.4 s, ~2.5 kHz, return 79 %, 31 ms */
 static volatile int32_t rv_type = RT_HALL;      /* SPACE 2: TYPE */
 #define RV_INF 127
+/* PRE-DELAY as the screen says it, ms (HALL: 0 .. 250; the plate family: 0 .. 54, CAVERN and SHIMMER 18 more) */
+static uint32_t rv_pre_ms(int32_t v)
+{
+    uint32_t t = (uint32_t)clamp(rv_type, 0, RV_NTYPE - 1), ms;
+    v = clamp(v, 0, 127);
+    if (t == RT_HALL)
+        return ((uint32_t)v * 250u + 63u) / 127u;
+    ms = (uint32_t)v * (PL_PRE_LEN - 1u) / 127u + (t >= RT_CAVERN ? PL_CAVE_PRE : 0u);
+    ms = ms > PL_PRE_LEN - 1u ? PL_PRE_LEN - 1u : ms;
+    return (ms * 2u + 22u) / 44u;               /* (22.05 kHz) */
+}
 
 /* Felucca's helpers: m / 2^sh rounded towards zero (a product that feeds back must not floor: a loop of floors holds
  * an offset and a little noise for ever) */
