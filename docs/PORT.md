@@ -205,7 +205,7 @@ also retains upstream `30aa882` (MIDI input device selection). Native/WASM
 and tuning tests passed after rebranding. Compatibility format identifiers
 (`grimm-backup`, `grimm-sound`, `sardab-tuning`) remain readable unchanged.
 
-### The desert look (0.4), the knobs (0.4.2)
+### The desert look (0.4), the knobs (0.4.2), the demo's MIDI channel (0.4.3)
 
 - **COLOUR DESERT** (SYSTEM): SARDAB's palette, obsidian to bone with copper for the active thing, as a fifth
   theme beside GR!MM's four accents; a fresh device starts on it, a saved COLOUR is kept. The editor accepts
@@ -225,3 +225,5 @@ and tuning tests passed after rebranding. Compatibility format identifiers
 - **Knobs** (0.4.2): the detent decoder is SARDAB's (#126: every frame's state counts, a two-state jump from
   the detent goes the way of a recent click), tested by `tests/enc_test.c`; GR!MM's 2-sample filter lost whole
   clicks on fast turns. A knob of up to nine choices steps one choice a pass.
+- **Demo's MIDI channel** (0.4.3, GR!MM 43e710d): a CH selector beside MIDI IN under the browser panel passes
+  one channel of 1..16 or ALL, kept in the browser; the firmware is unchanged.

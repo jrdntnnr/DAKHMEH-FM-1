@@ -53,7 +53,7 @@ node web/test_web.mjs                       # after tests/run_host.sh: the brows
 cd web/dist && python3 -m http.server 8000  # then open http://localhost:8000/ (or /editor.html)
 ```
 
-The browser build, host mode and the firmware all show the version in `VERSION` (0.4.2); `APP_VER=… web/build_web.sh` overrides it for one build.
+The browser build, host mode and the firmware all show the version in `VERSION` (0.4.3); `APP_VER=… web/build_web.sh` overrides it for one build.
 
 ## The site: emulator, editor, installer (GitHub Pages)
 
