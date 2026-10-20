@@ -41,6 +41,7 @@ enum { ENC_SELECT = 0, ENC_ALGORITHM = 1, ENC_KNOB1 = 2, ENC_KNOB2 = 3, ENC_KNOB
 #include "fm1_lcd_hw.h"
 #include "fm1_audio.h"
 #include "fm1_adc.h"
+#include "fm1_cpu1.h"
 #include "bootguard.h"
 
 #ifndef APP_NAME
@@ -54,6 +55,7 @@ enum { ENC_SELECT = 0, ENC_ALGORITHM = 1, ENC_KNOB1 = 2, ENC_KNOB2 = 3, ENC_KNOB
 #endif
 
 bootguard_t bootguard __attribute__((section(".noinit")));
+static void cpu1_boot(void);                    /* cpu1.c */
 static volatile uint32_t fm1_ms;                /* milliseconds since power-on (TIMER5) */
 
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
@@ -384,7 +386,8 @@ static void fm1_fault(const fm1_crash_t *c)
 void fm1_cstart(void)
 {
     extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
-    extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
+    extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_text_end[], _rt_load[];
+    extern uint32_t _c1_start[], _c1_end[], _c1_load[];
     uint32_t *s, *d, p3, boot_mode;
     fm1_time_init();
     fm1_reset_reason();
@@ -399,12 +402,15 @@ void fm1_cstart(void)
     for (d = _bss_start; d < _bss_end; d++) *d = 0;
     for (d = _pool_start; d < _pool_end; d++) *d = 0;
     for (s = _data_load, d = _data_start; d < _data_end; s++, d++) *d = *s;
-    for (s = _rt_load, d = _rt_start; d < _rt_end; s++, d++) *d = *s;
+    for (s = _rt_load, d = _rt_start; d < _rt_text_end; s++, d++) *d = *s;
+    for (s = _c1_load, d = _c1_start; d < _c1_end; s++, d++) *d = *s;
     fm1_mailbox_clear();
     fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS | FM1_GUARD_PC);
     fm1_boot.p3_rst = (uint8_t)p3;
     if (boot_mode == BOOT_RECOVERY || recovery_key())
         recovery_main();                        /* OCT- at power-on: the USB rescue */
+    cpu1_boot();                                /* the second core (cpu1.c): before the audio and the timers, while the
+                                                 * top of RAM (its entry word) is still writable */
     flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;
     if (flash_ok)
         fl_plain_window_init();                 /* GR!MM: the flash above 0x93000 (the samples) reads plain through XIP */

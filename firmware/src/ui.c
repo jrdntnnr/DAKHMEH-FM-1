@@ -166,7 +166,8 @@ static void ui_head_text(void)
     else if (page == PG_HOME) put_u(put_s(ui_hr, "> "), (uint32_t)clamp(seq_bpm, 20, 300));   /* (Main: the tempo) */
     else if (P->btn == BTN_SEL) put_u(put_s(ui_hr, "T"), sel + 1u);
     else if (page == PG_ARP) put_s(ui_hr, trk[sel].latch ? "LATCH" : "");   /* (Arp: LATCH, if on) */
-    else if (page == PG_SYSTEM || page == PG_SYS2) put_s(ui_hr, "V" APP_VER);   /* (System: the version) */
+    else if (page == PG_SYSTEM || page == PG_SYS2) put_s(put_s(ui_hr, "V" APP_VER " "), cpu1_label());   /* (System: the
+                                                 * version; 2C: both cores render, 1C: one) */
     else if (page == PG_FMALGO || page == PG_FMOP) put_u(put_s(ui_hr, "OP "), (uint32_t)clamp(fm_op, 0, 5) + 1u);   /* (EditFM:
                                                  * the operator) */
     else if (page == PG_SONG) put_u(put_s(put_u(ui_hr, (uint32_t)song_cur() + 1u), "/"), song_length());   /* (Song: the

@@ -106,9 +106,43 @@ static void fm1_reset_reason(void)
     fm1_boot.wdt_con = fm1_p33_read(FM1_P3_WDT_CON);
 }
 
+/* SLOOP 2.7.1, after Felucca 1.6.1 (Leo Kuroshita, GPL-3.0, fm1_sys.h fm1_cpu1_halt); into DAKHMEH from Clipper: hold
+ * the second core with the bus-invalid traps off. Holding core 1 cuts the access it has on the bus, and the chip
+ * flags that a few instructions later as a bus-invalid access (DBG_MSG bits 4, 5, 16..21): with the traps on
+ * (fm1_guard.h FM1_GUARD_BUS) core 0 took the exception. So: traps off, hold, let the flag come, clear it, traps
+ * back as they were. Registers only: safe when core 1 never ran */
+#define FM1__C1_CON (*(volatile uint32_t *)0x1EEE004u)
+#define FM1__DBG_WR_EN (*(volatile uint32_t *)0x1EEE240u)
+#define FM1__DBG_MSG_CLR (*(volatile uint32_t *)0x1EEE248u)
+#define FM1__DBG_EN (*(volatile uint32_t *)0x1EEE340u)
+#define FM1__DBG_BUS 0x003F0030u                 /* bus-invalid traps: AXI rd/wr (4, 5), C0/C1 fetch/rd/wr (16..21) */
+FM1_INLINE void fm1_cpu1_halt(void)
+{
+    uint32_t locked = !(FM1__DBG_WR_EN & 1u), en, bus = FM1__DBG_BUS;
+    volatile uint32_t n;
+    __asm__("" : "+r"(bus));                     /* (as Felucca: ~bus not folded into a constant) */
+    if (locked)
+        FM1__DBG_WR_EN = 0xE7u;                  /* unlock (as fm1_guard.h) */
+    en = FM1__DBG_EN;
+    FM1__DBG_EN = en & ~bus;
+    __asm__ volatile("csync" ::: "memory");
+    FM1__C1_CON |= 0x2u;                         /* hold: bit 1 set, then bit 3 (enable) cleared */
+    FM1__C1_CON &= ~0x8u;
+    __asm__ volatile("csync" ::: "memory");
+    for (n = 0; n < 256u; n++)                   /* the flag comes some instructions after the hold */
+        ;
+    FM1__DBG_MSG_CLR = bus;
+    __asm__ volatile("csync" ::: "memory");
+    FM1__DBG_EN = en;
+    if (locked && (FM1__DBG_WR_EN & 1u))
+        FM1__DBG_WR_EN = 0xE7u;                  /* lock again */
+    __asm__ volatile("csync" ::: "memory");
+}
+
 static void fm1_reboot(void)
 {
     __asm__ volatile("cli");
+    fm1_cpu1_halt();
     fm1_p33_or(FM1_P3_PR_PWR, 0x10);
     for (;;)
         ;
@@ -119,6 +153,7 @@ static void fm1_enter_uboot(void)
     static const char k[16] = "usb_update_mode";
     uint32_t i;
     __asm__ volatile("cli");
+    fm1_cpu1_halt();
     /* CPU0 write limits (fm1_guard.h) may cover the mailbox: drop them all */
     if (!(*(volatile uint32_t *)0x1EEE240u & 1u))
         *(volatile uint32_t *)0x1EEE240u = 0xE7u;
@@ -132,6 +167,7 @@ static void fm1_enter_uboot(void)
 
 FM1_INLINE void fm1_core_reset(void)
 {
+    fm1_cpu1_halt();
     FM1_PWR_CON |= 0x10u;
     for (;;)
         ;

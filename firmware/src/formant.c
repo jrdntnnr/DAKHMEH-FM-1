@@ -74,7 +74,8 @@ static void vowel_at(int32_t pos, int32_t *f, int32_t *b)
 }
 
 typedef struct { int32_t a, b, c; } fres_t;
-static int32_t formant_nz = 0x2545F491;         /* breath noise, one xorshift for all voices */
+static int32_t formant_nz[NT] = {0x2545F491, 0x6B8B4567, 0x327B23C6, 0x643C9869};   /* breath noise, one xorshift
+                                                 * a track (a track renders on one core at a time) */
 static int32_t vx_s[NV][7];                     /* F1..F3 y1 / y2, the tilt */
 static int32_t vx_g[NV][4];                     /* the knobs as the voice has them now (Q8), gliding to where they are
                                                  * turned (~3 ms: the resonators' coefficients never step) */
@@ -124,7 +125,7 @@ static void formant_block(voice_t *v, const volatile int32_t *p, int32_t *mono, 
     uint32_t inc = voice_inc(v, pitch), i, te, tp, rp, rn, ratio, f0;
     uint32_t ph = v->ph[0];
     int32_t y1 = st[0], y2 = st[1], y3 = st[2], y4 = st[3], y5 = st[4], y6 = st[5];
-    int32_t y7 = (int32_t)v->ph[1], y8 = (int32_t)v->ph[2], lp = st[6], nst = formant_nz;
+    int32_t y7 = (int32_t)v->ph[1], y8 = (int32_t)v->ph[2], lp = st[6], nst = formant_nz[v->trk % NT];
 
     formant_glide(g, p);
     br = g[3];                                  /* (Q8) */
@@ -198,7 +199,7 @@ static void formant_block(voice_t *v, const volatile int32_t *p, int32_t *mono, 
     v->ph[0] = ph;
     v->ph[1] = (uint32_t)y7;
     v->ph[2] = (uint32_t)y8;
-    formant_nz = nst;
+    formant_nz[v->trk % NT] = nst;
     st[0] = y1, st[1] = y2, st[2] = y3, st[3] = y4, st[4] = y5, st[5] = y6, st[6] = lp;
 }
 

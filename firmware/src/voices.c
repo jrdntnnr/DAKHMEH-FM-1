@@ -277,16 +277,81 @@ static int32_t env_tick(voice_t *v)
 }
 
 /* the audio ISR: n frames (a multiple of CTL, at most VB) of every sounding voice into tb[its track] (mono); returns
- * the tracks that sound (bit t), whose buffers it zeroed first; the others' are left as they were */
+ * the tracks that sound (bit t), whose buffers it zeroed first; the others' are left as they were.
+ *
+ * The second core (cpu1.c): a control step at a time, core 0 does the control for every voice first (ctl_hook, the
+ * envelopes, the tuning), then hands core 1 the tracks whose voices weigh more (ENG_COST), renders the others and
+ * waits. A track renders on one core in a step, so its engine's per-track state (fm.c fm_trk, wheel.c drw_t) and
+ * its buffer are one core's; a voice's state is its own (fm.c fm_note, lfo.c lfo_pm, ..). The sums are integers:
+ * the output is the same whichever core adds, bit for bit (tests/split_test.c). A job lost (cpu1_wait -1): core 0
+ * renders those tracks itself, that step's voices advanced twice (a glitch), and one core from then on. */
 #define VB 256u
 static void ctl_hook(void);                     /* grimm.c: a control block's notes (the main loop's asks, the
                                                  * sequencer), before the voices */
+static const uint8_t ENG_COST[NENG] = {2, 5, 2, 3, 3, 8, 2};   /* a voice's weight: VA, FM, SAMPLE, VOICE, WHEEL, PHYS,
+                                                 * PHASE (about) */
+static int32_t va0[NV];                         /* each voice's amplitude at the step's start (the job reads them) */
+static struct {                                 /* the job for core 1 (set before cpu1_run, read until cpu1_wait) */
+    int32_t (*tb)[VB];
+    uint32_t n, b, mask, used_in, used_out;     /* the frames, the step's offset, the tracks; the tracks zeroed before
+                                                 * it and after it */
+} c1;
+/* the sounding voices of the tracks in mask, this step, into tb (a track's buffer zeroed at its first sound) */
+static void render_tracks(uint32_t mask, uint32_t b, uint32_t n, int32_t (*tb)[VB], uint32_t *used)
+{
+    uint32_t k, i;
+    for (k = 0; k < NV; k++) {
+        voice_t *v = &vc[k];
+        uint32_t t = v->trk % NT;
+        if (!(mask >> t & 1u) || (!va0[k] && !v->amp))
+            continue;                           /* silent: costs nothing */
+        if (!(*used >> t & 1u)) {               /* the track's first sound this block */
+            *used |= 1u << t;
+            for (i = 0; i < n; i++)
+                tb[t][i] = 0;
+        }
+        ENGINES[v->eng]->block(v, lfo_params(k, t, v->eng), tb[t] + b, va0[k], v->amp);   /* (the engine it began
+                                                 * with; the LFO's on one of its knobs) */
+    }
+}
+static void c1_job(uint32_t arg)
+{
+    (void)arg;
+    c1.used_out = c1.used_in;
+    render_tracks(c1.mask, c1.b, c1.n, c1.tb, &c1.used_out);
+}
+/* the tracks core 1 takes: the sounding tracks weighed, the heaviest first onto the lighter side (0: fewer than two) */
+static uint32_t split_tracks(uint32_t snd)
+{
+    int32_t w[NT] = {0, 0, 0, 0}, w0 = 0, w1 = 0;
+    uint32_t k, t, done = 0, mask = 0, n = 0;
+    for (k = 0; k < NV; k++)
+        if (va0[k] || vc[k].amp)
+            w[vc[k].trk % NT] += ENG_COST[vc[k].eng % NENG];
+    for (t = 0; t < NT; t++)
+        n += snd >> t & 1u;
+    if (n < 2u)
+        return 0;
+    for (k = 0; k < n; k++) {
+        uint32_t best = NT;
+        for (t = 0; t < NT; t++)
+            if ((snd >> t & 1u) && !(done >> t & 1u) && (best == NT || w[t] > w[best]))
+                best = t;
+        done |= 1u << best;
+        if (w1 < w0 || (w1 == w0 && k))
+            w1 += w[best], mask |= 1u << best;
+        else
+            w0 += w[best];
+    }
+    return mask;
+}
 static uint32_t voices_render(int32_t (*tb)[VB], uint32_t n)
 {
-    uint32_t b, i, k, used = 0, envd = 0;
+    uint32_t b, k, used = 0, envd = 0;
     if (n > VB)
         return 0;
     for (b = 0; b < n; b += CTL, vblock++) {
+        uint32_t snd = 0, mask;
         ctl_hook();
         for (k = 0; k < NV; k++)                /* nothing sounds and nothing is asked for: nothing to do */
             if (vc[k].stage != ST_OFF || vc[k].amp || vc[k].req != vc[k].seen) break;
@@ -297,22 +362,29 @@ static uint32_t voices_render(int32_t (*tb)[VB], uint32_t n)
                 env_coef(&env_c[k], trk[k].env);
             envd = 1;
         }
-        for (k = 0; k < NV; k++) {
+        for (k = 0; k < NV; k++) {              /* the control: every voice's envelope and tuning */
             voice_t *v = &vc[k];
             int32_t amp0 = v->amp, amp1 = env_tick(v);
             if (v->vgain < 32767) amp1 = mulq15(amp1, v->vgain);   /* (the ENV at its velocity; 127: as it was) */
-            uint32_t t = v->trk;
+            va0[k] = amp0;
             v->amp = amp1;
             if (!amp0 && !amp1)
-                continue;                       /* silent: costs nothing */
-            if (!(used >> t & 1u)) {            /* the track's first sound this block */
-                used |= 1u << t;
-                for (i = 0; i < n; i++)
-                    tb[t][i] = 0;
-            }
+                continue;
+            snd |= 1u << (v->trk % NT);
             voice_tuning_tick(v);
-            ENGINES[v->eng]->block(v, lfo_params(k, t, v->eng), tb[t] + b, amp0, amp1);   /* (the engine it began
-                                                 * with; the LFO's on one of its knobs) */
+        }
+        mask = cpu1_split && cpu1_on() ? split_tracks(snd) : 0;
+        if (mask) {
+            c1.tb = tb, c1.n = n, c1.b = b, c1.mask = mask, c1.used_in = used;
+            if (!cpu1_run(c1_job, 0))
+                mask = 0;
+        }
+        render_tracks(snd & ~mask, b, n, tb, &used);
+        if (mask) {
+            if (cpu1_wait() == 0)
+                used |= c1.used_out;
+            else
+                render_tracks(mask, b, n, tb, &used);   /* (lost: those tracks here, once; one core from now) */
         }
     }
     return used;

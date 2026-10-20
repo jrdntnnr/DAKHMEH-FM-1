@@ -108,6 +108,7 @@
  * What platform.c offers: docs/API.md. The chip's rules: docs/RULES.md. */
 #define APP_NAME "DAKHMEH"                        /* the app, the rescue and the crash screen say this */
 #include "platform.c"
+#include "cpu1.c"                               /* the second core (voices.c hands it tracks) */
 #include "key_velocity.h"                       /* the keys' velocity (on the FM-1: hal/fm1_velocity.h senses it) */
 #include "dsp.c"
 #include "wear.c"
