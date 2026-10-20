@@ -247,8 +247,8 @@ step n's 4 bits in byte 256 + n / 2, the low nibble for even n, the high for odd
 | 167 | the settings' version (1) |
 
 Pages (a link's page): 0 SOUND, 1 SOURCE, 2 ENV, 3 LFO, 4 SCALE, 5 CHORD, 6 SONG, 7 HOME, 8 MIXER 1, 9 MIXER 2,
-14 ARP, 15 GRID, 16 PATTERN SETTINGS, 17 TAPE, 18 GRAIN, 19 DELAY, 20 SPACE, 23 FM ALGO, 24 FM OP (the others can't be
-learned).
+14 ARP, 15 GRID, 16 PATTERN SETTINGS, 17 TAPE, 18 GRAIN, 19 DELAY, 20 SPACE, 23 FM ALGO, 24 FM OP, 35 SPACE 2 (the
+others can't be learned).
 
 ## Samples (11–16)
 

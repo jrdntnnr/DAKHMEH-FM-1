@@ -51,7 +51,8 @@
 #define XT_ALL (XT_PK * NT)
 #define XT_G 4u                                 /* the working project's: DREAM's MOOD, DENSITY, EVOLVE, DRIFT */
 #define SLOT_LEN(tn, sq, lk) (4u + NT * ((tn) + (sq) + (lk)))   /* a slot: [0] used, its tracks, sequences, locks */
-#define SONG_PK 20u                             /* the song: its chain (16), MODE, the mutes and solos, 2 spare */
+#define SONG_PK 20u                             /* the song: its chain (16), MODE, the mutes and solos, SPACE's TYPE
+                                                 * (0.5; 0 before it: HALL), 1 spare */
 #define WORK_LEN(tn, sg, sq, lk, fm, xt) (NT * ((tn) + (sq) + (lk)) + 16u + 4u + (sg) + (fm) + (xt))   /* the working
                                                  * project: tracks, effects, tempo, slot, .., sequences, locks, the song,
                                                  * the FM patches, the extras (an older version's sizes: sg 0 before the
@@ -554,7 +555,8 @@ static void pk_work(uint8_t *q)
     for (k = 0; k < SONG_N; k++)                /* the song: a step a byte (its slot or END, its REPEATS - 1 << 3), */
         q[k] = (uint8_t)(clamp(song_pat[k], 0, SONG_END) | (clamp(song_rep[k], 1, 16) - 1) << 3);
     q[16] = (uint8_t)clamp(song_mode, 0, NSONGMODE - 1);   /* MODE, */
-    q[17] = (uint8_t)((trk_mute & 15u) | (trk_solo & 15u) << 4), q[18] = q[19] = 0;   /* the mutes and solos */
+    q[17] = (uint8_t)((trk_mute & 15u) | (trk_solo & 15u) << 4);   /* the mutes and solos */
+    q[18] = (uint8_t)clamp(rv_type, 0, RV_NTYPE - 1), q[19] = 0;   /* SPACE's TYPE */
     for (t = 0; t < NT; t++) pk_fm(q + SONG_PK + t * FM_PK, t);   /* the FM patches */
     q += SONG_PK + FM_ALL;
     for (t = 0; t < NT; t++) q = pk_xt(q, t);   /* the extras */
@@ -601,6 +603,7 @@ static void uk_work(const uint8_t *q, uint32_t f, const uint16_t *vs)   /* (f: U
     if (globals) {
         song_mode = clamp(q[16], 0, NSONGMODE - 1);
         trk_mute = q[17] & 15u, trk_solo = q[17] >> 4 & 15u;
+        rv_type = clamp(q[18], 0, RV_NTYPE - 1);
     }
 }
 static void pk_slot(uint8_t *q)                 /* the four tracks, their sequences and locks into a slot (used) */

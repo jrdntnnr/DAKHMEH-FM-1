@@ -659,7 +659,7 @@ static char *put_ms(char *s, uint32_t q16)      /* a time, ms in Q16: "5 ms", "1
  * tap opens its first page, again the next (round); SYSTEM is HOME's, held */
 enum { PG_SOUND, PG_SOURCE, PG_ENV, PG_LFO, PG_SCALE, PG_CHORD, PG_SONG, PG_HOME, PG_MIX1, PG_MIX2, PG_SYSTEM,
        PG_SYS2, PG_SOUNDS, PG_PROJECTS, PG_ARP, PG_GRID, PG_PATTERN, PG_TAPE, PG_GRAIN, PG_DELAY, PG_SPACE, PG_PERFORM,
-       PG_TRACK, PG_FMALGO, PG_FMOP, PG_TUNE1, PG_TUNE2, PG_TUNE3, PG_TUNING, PG_TASH1, PG_TASH2, PG_TASH3, PG_STEP, PG_CANON, PG_DREAM, NPAGE };   /* (the newer last: MIDI LEARN's links keep the pages' numbers they
+       PG_TRACK, PG_FMALGO, PG_FMOP, PG_TUNE1, PG_TUNE2, PG_TUNE3, PG_TUNING, PG_TASH1, PG_TASH2, PG_TASH3, PG_STEP, PG_CANON, PG_DREAM, PG_SPACE2, NPAGE };   /* (the newer last: MIDI LEARN's links keep the pages' numbers they
                                                  * have; in their button's round by pg_key. TRACK: gone in step 25, its
                                                  * number kept: sys_load moves its links onto HOME) */
 typedef struct {
@@ -708,11 +708,13 @@ static const page_t PAGES[NPAGE] = {
     {"STEP", BTN_SEQ, 1, 1, 1, {"VELOCITY", "", "", ""}},   /* (GRID's step: after GRID) */
     {"CANON", BTN_ARP, 1, 1, 1, {"CANON", "", "", ""}},     /* (the second playhead, seq.c: after ARP) */
     {"DREAM", BTN_GLO, 1, 0, 1, {"MOOD", "DENSITY", "EVOLVE", "DRIFT"}},   /* (dream.c: after SONG; a key composes) */
+    {"SPACE 2", BTN_FX, 1, 0, 1, {"TYPE", "", "", ""}},   /* (hall.c: the reverb's TYPE; after SPACE) */
 };
 static uint32_t pg_key(uint32_t p)              /* its place in its button's round */
 {
     return p == PG_FMALGO ? PG_SOUND * 4u + 1u : p == PG_FMOP ? PG_SOUND * 4u + 2u : p == PG_STEP ? PG_GRID * 4u + 1u :
-           p == PG_CANON ? PG_ARP * 4u + 1u : p == PG_DREAM ? PG_SONG * 4u + 1u : p * 4u;
+           p == PG_CANON ? PG_ARP * 4u + 1u : p == PG_DREAM ? PG_SONG * 4u + 1u : p == PG_SPACE2 ? PG_SPACE * 4u + 1u :
+           p * 4u;
 }
 static int pg_on(uint32_t p)                    /* in its button's round now (FM ALGO, FM OP: an FM track's only) */
 {
@@ -770,6 +772,7 @@ static volatile int32_t *knob_param(uint32_t pg, uint32_t k)   /* what KNOB k + 
                            &trk[sel].fmo[clamp(fm_op, 0, 5)][FO_FINE];
     case PG_FMOP: return &trk[sel].fmo[clamp(fm_op, 0, 5)][k == 0u ? FO_RATIO : k == 1u ? FO_LEVEL : k == 2u ? FO_ATK : FO_DEC];
     case PG_TAPE: case PG_GRAIN: case PG_DELAY: case PG_SPACE: return FX[pg - PG_TAPE][k];
+    case PG_SPACE2: return k == 0u ? &rv_type : 0;
     case PG_GRID: {                             /* the selected step of the track's pattern */
         seq_step_t *st = &seq[sel].pat[clamp(seq[sel].cur, 0, SEQ_NPAT - 1)].st[clamp(seq[sel].cursor, 0, SEQ_N - 1)];
         return k == 0u ? &st->note : k == 1u ? &st->chance : k == 2u ? &st->ratchet : &st->len;
@@ -799,6 +802,7 @@ static int32_t knob_max(uint32_t pg, uint32_t k)
            pg == PG_ARP ? (k == 0u ? NARPMODE - 1 : k == 1u ? NARPRATE - 1 : k == 2u ? 4 : 100) :
            pg == PG_LFO ? (k == 0u ? 127 : k == 1u ? 100 : k == 2u ? NLFODEST - 1 : NLFOSHAPE - 1) :
            pg == PG_SONG ? (k == 0u ? SONG_N - 1 : k == 1u ? SONG_END : k == 2u ? 16 : NSONGMODE - 1) :
+           pg == PG_SPACE2 ? (k == 0u ? RV_NTYPE - 1 : 0) :
            pg == PG_SYSTEM ? (k == 0u ? NCOL - 1 : k == 1u ? MCH_ALL : k == 2u ? 50 : 4) : pg == PG_SYS2 ? (k == 3u ? 3 : k ? 1 : 2) :
            pg == PG_HOME && k == 3u ? 200 : pg == PG_FMALGO ? (k == 0u ? 31 : k == 1u ? 7 : k == 2u ? 5 : 99) :
            pg == PG_FMOP ? (k ? 99 : 31) : 127;
@@ -919,9 +923,14 @@ static void knob_text(uint32_t pg, uint32_t k, char *s)   /* knob k's value on p
         case 3: put_pc(s, v); return;
         default: put_u(s, (uint32_t)v); return;
         }
+    case PG_SPACE2: put_s(s, RV_TYPE_NAME[clamp(v, 0, RV_NTYPE - 1)]); return;
     default:                                    /* SPACE */
         switch (k) {
-        case 0: if (v >= RV_INF) put_s(s, "INF"); else put_s(put_x10(s, RV_RT60_X10[clamp(v, 0, 126)]), " s"); return;
+        case 0:                                 /* (HALL: RT60, INF; the plate family: how far up its decay goes) */
+            if (rv_type != RT_HALL) put_pc(s, v);
+            else if (v >= RV_INF) put_s(s, "INF");
+            else put_s(put_x10(s, RV_RT60_X10[clamp(v, 0, 126)]), " s");
+            return;
         case 2: put_pc(s, v); return;
         case 3: put_s(put_u(s, ((uint32_t)v * 250u + 63u) / 127u), " ms"); return;
         default: put_u(s, (uint32_t)v); return;

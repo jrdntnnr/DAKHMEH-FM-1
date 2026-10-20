@@ -473,6 +473,7 @@ static void ui_slab_fill(uint32_t k, slab_t *S)
         break;
     case PG_SPACE:
         if (k == 0u) {
+            if (rv_type != RT_HALL) break;      /* (the plate family: a percentage) */
             if (v >= RV_INF) put_s(S->val, "INF");
             else { put_x10(S->val, RV_RT60_X10[clamp(v, 0, 126)]); put_s(S->val + ui_len(S->val), "S"); }
             return;
@@ -1169,16 +1170,16 @@ static void pic_delay(void)                     /* Space: the echoes, smaller ea
 }
 static void pic_space(void)                     /* Space: the reverb's tail, as long as SIZE (INF: it never falls) */
 {
-    int32_t v = clamp(rv_size, 0, 127), i, j, tl = 2 + v * 14 / 127;
-    ui_caption("REVERB", 0);
+    int32_t v = clamp(rv_size, 0, 127), i, j, tl = 2 + v * 14 / 127, inf = v >= RV_INF && rv_type == RT_HALL;
+    ui_caption("REVERB", RV_TYPE_NAME[clamp(rv_type, 0, RV_NTYPE - 1)]);
     for (i = 0; i < 37; i++) {
-        int32_t h = v >= RV_INF ? 18 : (int32_t)((18u * pow2_q16(-(i * 192) / tl) + 32768u) >> 16);
+        int32_t h = inf ? 18 : (int32_t)((18u * pow2_q16(-(i * 192) / tl) + 32768u) >> 16);
         h += (i * 7) % 3 - 1;
         h = h < 1 ? 1 : h > 18 ? 18 : h;
         for (j = 0; j < h; j++)
             ui_rect(9 + i * 6, 156 - (h - j) * 4, 3, 3, j == 0 ? UI_L : j < h / 2 ? UI_M : UI_D);
     }
-    if (v >= RV_INF) {
+    if (inf) {
         ui_rect(180, 29, 56, 12, ui_acc);
         ui_text(184, 31, "FREEZE", 1, UI_K);
     }
@@ -1673,7 +1674,7 @@ static void ui_pic_draw(void)
     case PG_TAPE: pic_tape(); return;
     case PG_GRAIN: pic_grain(); return;
     case PG_DELAY: pic_delay(); return;
-    case PG_SPACE: pic_space(); return;
+    case PG_SPACE: case PG_SPACE2: pic_space(); return;
     case PG_GRID: case PG_STEP: pic_grid(); return;
     case PG_CANON: pic_canon(); return;
     case PG_DREAM: pic_dream(); return;

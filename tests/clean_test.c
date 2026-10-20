@@ -49,7 +49,7 @@ static void clean(void)
     for (t = 0; t < NT; t++) { trk[t] = defaults; lfo_p16[t] = 0; fm_builtin(t, 0); }
     seq_init();
     tf_wow = tf_sat = tf_tone = tf_hiss = 0;
-    ge_mix = 0, dl_mix = 0, rv_mix = 0;
+    ge_mix = 0, dl_mix = 0, rv_mix = 0, rv_type = RT_HALL;
     run(40);
 }
 /* a chord held on track 0 (the others silent) with the engine and the sends asked for, settled; then each change,
@@ -104,6 +104,11 @@ static void ch_rv_inf(uint32_t j) { rv_mix = 100; trk[0].rev = 100; rv_size = j 
 static void ch_rv_damp(uint32_t j) { rv_mix = 100; trk[0].rev = 100; rv_damp = j & 1u ? 127 : 0; }
 static void ch_rv_mix(uint32_t j) { trk[0].rev = 100; rv_mix = j & 1u ? 127 : 0; }
 static void ch_rv_pre(uint32_t j) { rv_mix = 100; trk[0].rev = 100; rv_pre = j & 1u ? 127 : 0; }
+static void ch_rv_type(uint32_t j) { rv_mix = 100; trk[0].rev = 100; rv_type = (int32_t)((j + 1u) % (uint32_t)RV_NTYPE); }
+static uint32_t type_now;
+static void ch_rv_size_t(uint32_t j) { rv_type = (int32_t)type_now; rv_mix = 100; trk[0].rev = 100; rv_size = j & 1u ? 127 : 10; }
+static void ch_rv_pre_t(uint32_t j) { rv_type = (int32_t)type_now; rv_mix = 100; trk[0].rev = 100; rv_pre = j & 1u ? 127 : 0; }
+static void ch_rv_damp_t(uint32_t j) { rv_type = (int32_t)type_now; rv_mix = 100; trk[0].rev = 100; rv_damp = j & 1u ? 127 : 0; }
 static void ch_ge_size(uint32_t j) { ge_mix = 100; trk[0].grn = 100; ge_size = j & 1u ? 127 : 10; }
 static void ch_ge_dens(uint32_t j) { ge_mix = 100; trk[0].grn = 100; ge_dens = j & 1u ? 127 : 10; }
 static void ch_ge_scat(uint32_t j) { ge_mix = 100; trk[0].grn = 100; ge_scat = j & 1u ? 127 : 0; }
@@ -150,6 +155,15 @@ int main(void)
     check("SPACE DAMP 0 <-> 127", ENG_VA, ch_rv_damp, 6, 60);
     check("SPACE MIX 0 <-> 127", ENG_VA, ch_rv_mix, 6, 40);
     check("SPACE PRE-DELAY 0 <-> 250 ms", ENG_VA, ch_rv_pre, 6, 60);
+    check("SPACE TYPE round HALL PLATE CAVERN SHIMMER", ENG_VA, ch_rv_type, 8, 40);
+    for (type_now = RT_PLATE; type_now < (uint32_t)RV_NTYPE; type_now++) {
+        snprintf(what, sizeof what, "SPACE %s: SIZE 10 <-> 127", RV_TYPE_NAME[type_now]);
+        check(what, ENG_VA, ch_rv_size_t, 6, 60);
+        snprintf(what, sizeof what, "SPACE %s: DAMP 0 <-> 127", RV_TYPE_NAME[type_now]);
+        check(what, ENG_VA, ch_rv_damp_t, 6, 60);
+        snprintf(what, sizeof what, "SPACE %s: PRE-DELAY 0 <-> 54 ms", RV_TYPE_NAME[type_now]);
+        check(what, ENG_VA, ch_rv_pre_t, 6, 60);
+    }
     check("GRAIN SIZE 10 <-> 127", ENG_VA, ch_ge_size, 6, 60);
     check("GRAIN DENSITY 10 <-> 127", ENG_VA, ch_ge_dens, 6, 60);
     check("GRAIN SCATTER 0 <-> 127", ENG_VA, ch_ge_scat, 6, 60);
