@@ -131,6 +131,11 @@ not establish hardware CPU or interrupt-stack margins.
 
 ## Validation and build status
 
+- 0.5: `tests/run_host.sh` runs `enc_test` (SARDAB's cases and Clipper's), `clean_test` (48 cases, all clean)
+  and `split_test` in four modes (one core and two the same, bit for bit; a job lost falls back). The host run's
+  sound is byte for byte 0.4.3's (HALL and the split change nothing that sounded before). The native/WASM
+  comparison passes. The device build links with `.c1_text` in RAM and 220 B of pool to spare.
+
 - `sh tests/run_desert.sh`: sanitized firmware integration checks, including
   7,924,800 factory pitch combinations (worst oscillator error 0.2130 cents,
   FM 0.2894 cents), separate tuning modes, custom offsets, retune policies,
@@ -227,3 +232,25 @@ and tuning tests passed after rebranding. Compatibility format identifiers
   clicks on fast turns. A knob of up to nine choices steps one choice a pass.
 - **Demo's MIDI channel** (0.4.3, GR!MM 43e710d): a CH selector beside MIDI IN under the browser panel passes
   one channel of 1..16 or ALL, kept in the browser; the firmware is unchanged.
+
+### Two cores, three more reverbs, no clicks (0.5)
+
+- **The second core** (`hal/fm1_cpu1.h`, X0X's by way of SLOOP and Clipper; `cpu1.c`): started at power-on before
+  the audio and the timers, proved with a self-test job, held again if it fails to report or answers wrong. Each
+  control step `voices_render` does the control for every voice (the envelopes, the tuning), weighs the sounding
+  tracks by their engines (`ENG_COST`) and hands core 1 the heavier half of the tracks; it renders the rest and
+  waits. A track renders on one core in a step, so the engines' per-track state is one core's; a voice's state is
+  its own; the FM6 modulator buses moved onto the stack, VOICE's breath noise became one stream a track. Integer
+  sums: the output is the same bit for bit whoever renders what (`tests/split_test.c`: one core against two under
+  the host double, inline, on a thread, on a slow thread, with a job lost). A job lost (8 ms): that step's tracks
+  rendered on core 0 once more, then one core until power-off. SYSTEM's header shows `2C` or `1C`. The effects
+  (DELAY, SPACE, GRAIN, TAPE) stay on core 0. No menu switch: the fallback is automatic. **Not yet run on an FM-1.**
+- **SPACE TYPE** (SPACE 2): HALL as before, bit for bit; PLATE, CAVERN and SHIMMER are Clipper's Dattorro plate
+  (`hall.c`), in HALL's memory (a union: the pool is full), so their PRE-DELAY stops at 54 ms and SIZE 127 is a
+  long decay, not a freeze. A TYPE change fades the return out, clears, fades in. Saved in the working project's
+  song block (a spare byte: older saves read HALL).
+- **No clicks** (`tests/clean_test.c`, after Clipper's): a chord held, every knob of the mix and the effects turned,
+  the output's second difference watched for a step. Fixed by it: DELAY TIME (the new tap fades in over the old,
+  46 ms, instead of a glide that read the tape at 20 x), VOICE's knobs (they glide, ~3 ms), PHYS (the old model
+  fades out before the new is struck; STRUCTURE, DAMP and BOW glide). PHYS's MODEL strike and STRUCTURE's retuning
+  are transients by design and exempt.

@@ -13,6 +13,8 @@ Captured from the firmware renderer. Native resolution: 240 × 240. Shown at 2×
 | ![Chords](chords.png) | ![Tuning](tuning.png) |
 | Sequencer | Colour |
 | ![Sequencer](sequencer.png) | ![COLOUR: the five themes](colour.png) |
+| Space | |
+| ![SPACE: the reverb, CAVERN](space.png) | |
 
 Regenerate: `sh tools/capture_screens.sh`.
 Historical GR!MM screenshots remain in the parent directory.

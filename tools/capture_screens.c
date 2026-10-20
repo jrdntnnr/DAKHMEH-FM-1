@@ -34,6 +34,8 @@ int main(void)
     fm1_ms+=UI_SCROLL_MS*4;shot("scroll-b",PG_SCALE);
     trk[0].scale=16;
     shot("colour",PG_SYSTEM);
+    rv_type=RT_CAVERN;shot("space",PG_SPACE);  /* the reverb's TYPE in the caption (SPACE 2 picks it) */
+    rv_type=RT_HALL;
     note_off(0,7,SRC_KEY,0);
     note_on(0,11,64,SRC_KEY,0,-1,127);
     ch_last=64;shot("maqam-rast",PG_SCALE);
