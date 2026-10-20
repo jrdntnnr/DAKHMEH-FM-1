@@ -76,6 +76,9 @@ static void vowel_at(int32_t pos, int32_t *f, int32_t *b)
 typedef struct { int32_t a, b, c; } fres_t;
 static int32_t formant_nz = 0x2545F491;         /* breath noise, one xorshift for all voices */
 static int32_t vx_s[NV][7];                     /* F1..F3 y1 / y2, the tilt */
+static int32_t vx_g[NV][4];                     /* the knobs as the voice has them now (Q8), gliding to where they are
+                                                 * turned (~3 ms: the resonators' coefficients never step) */
+#define VX_MAX(k) ((k) == 1 ? 24 : 127)
 
 /* Klatt resonator coefficients (Q30) for F, BW in Hz * 16 */
 static void fres_coef(fres_t *r, uint32_t f16, uint32_t bw16)
@@ -95,26 +98,40 @@ static void fres_coef(fres_t *r, uint32_t f16, uint32_t bw16)
 static void formant_begin(voice_t *v)           /* a note from silence: the opening starts at zero (no click) */
 {
     uint32_t i;
+    const volatile int32_t *p = trk[v->trk % NT].p[ENG_VOICE];
     v->ph[0] = v->ph[1] = v->ph[2] = 0;
     for (i = 0; i < 7u; i++)
         vx_s[v - vc][i] = 0;
+    for (i = 0; i < 4u; i++)
+        vx_g[v - vc][i] = clamp(p[i], 0, VX_MAX(i)) << 8;
+}
+/* the knobs a step closer to where they are (a quarter of the way each control step) */
+static void formant_glide(int32_t *g, const volatile int32_t *p)
+{
+    uint32_t k;
+    for (k = 0; k < 4u; k++) {
+        int32_t d = (clamp(p[k], 0, VX_MAX(k)) << 8) - g[k];
+        g[k] += d > -4 && d < 4 ? d : d >> 2;
+    }
 }
 
 /* CTL frames of voice v, added to mono[] (eng_formant.c formant_render) */
 static void formant_block(voice_t *v, const volatile int32_t *p, int32_t *mono, int32_t amp0, int32_t amp1)
 {
-    int32_t *st = vx_s[v - vc], pitch = VP16(v), damp = amp1 - amp0;
+    int32_t *st = vx_s[v - vc], *g = vx_g[v - vc], pitch = VP16(v), damp = amp1 - amp0;
     fres_t r1, r2, r3, r4;
-    int32_t fa[3], ba[3], j, buzz, oq, tilt, gv, gn, og, ogk, br = clamp(p[3], 0, 127);
+    int32_t fa[3], ba[3], j, buzz, oq, tilt, gv, gn, og, ogk, br;
     uint32_t inc = voice_inc(v, pitch), i, te, tp, rp, rn, ratio, f0;
     uint32_t ph = v->ph[0];
     int32_t y1 = st[0], y2 = st[1], y3 = st[2], y4 = st[3], y5 = st[4], y6 = st[5];
     int32_t y7 = (int32_t)v->ph[1], y8 = (int32_t)v->ph[2], lp = st[6], nst = formant_nz;
 
-    vowel_at(clamp(p[0], 0, 127) << 8, fa, ba);
+    formant_glide(g, p);
+    br = g[3];                                  /* (Q8) */
+    vowel_at(g[0], fa, ba);
     /* SHIFT (semitones) and the key tracking around C4 (fixed), one ratio for all four; Q at 64: the bandwidths as
      * they are */
-    ratio = fmt_ratio((clamp(p[1], 0, 24) - 12) * 16 + ((FMT_FOLOW * (pitch - 60 * 16) * 516) >> 16));
+    ratio = fmt_ratio(((g[1] - 12 * 256) * 16 >> 8) + ((FMT_FOLOW * (pitch - 60 * 16) * 516) >> 16));
     f0 = (uint32_t)(((uint64_t)inc * 705600u) >> 32);   /* F0 in Hz * 16 */
     for (j = 0; j < 3; j++) {
         int32_t f = (int32_t)(((int64_t)fa[j] * ratio) >> 16), b = (int32_t)(((int64_t)ba[j] * ratio) >> 16);
@@ -133,15 +150,15 @@ static void formant_block(voice_t *v, const volatile int32_t *p, int32_t *mono, 
               (uint32_t)clamp((int32_t)((250u * 16u * (uint64_t)ratio) >> 16), 20 * 16, 1500 * 16));
 
     /* the source: BUZZ -> open quotient and tilt */
-    buzz = clamp(p[2], 0, 127) << 8;
+    buzz = g[2];
     oq = 58982 - ((buzz * 284) >> 8);           /* Q16: 0.90 .. 0.35 */
     tilt = 2500 + ((buzz * 109) >> 8);          /* one-pole coefficient Q14: dark .. open */
     te = (uint32_t)oq << 16;                    /* closure (end of the open phase) */
     tp = (te >> 8) * 166u;                      /* opening: 65 % of it, closing 35 % */
     rp = (1u << 30) / ((tp >> 16) | 1u);
     rn = (1u << 30) / (((te - tp) >> 16) | 1u);
-    gv = 32767 - br * br * 2;                   /* BREATH: voicing fades at the top */
-    gn = br * 258;                              /* noise: Q15, up to 1.0 */
+    gv = 32767 - ((br * br * 2) >> 16);         /* BREATH: voicing fades at the top */
+    gn = (br * 258) >> 8;                       /* noise: Q15, up to 1.0 */
     og = 13000;                                 /* output (Q at 64) */
     og = (int32_t)(((int64_t)og * fmt_ratio((60 * 16 - pitch) / 4)) >> 16);   /* 1.5 dB / oct: low notes are sparse */
     ogk = (og >> 2) * (4 + (buzz >> 10));       /* presence k = 1 .. 4.9 */

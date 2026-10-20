@@ -9,7 +9,9 @@
  *     scan: every detent counted, none twice;
  *   - slow turns (3 .. 40 detents/s) with contacts bouncing 1.5 ms: one step a click;
  *   - 8 right then 6 left at 120/s, bouncing: 8, then 2;
- *   - a still knob with one contact chattering, or both lost together: never a step.
+ *   - a still knob with one contact chattering, or both lost together: never a step;
+ *   - (after Clipper's tests/encoder_test.c) clicks played state by state: pauses mid-click of 50 ms, 200 ms and 1 s,
+ *     half a click and back, contact bounce on each transition, flicks seen as two-state jumps.
  * The GPIO / timer helpers of the header are compiled, never called. */
 #include <stdint.h>
 #include <stdio.h>
@@ -102,6 +104,22 @@ static int32_t en_run(uint32_t until)
     return fm1_in.enc_steps[0];
 }
 
+/* encoder 0 state by state (after Clipper's tests/encoder_test.c): st_pos walks the quadrature cycle 00 01 11 10,
+ * each state held for `hold` frames of the scan */
+static const uint8_t ST_CW[4] = {0, 1, 3, 2};
+static uint32_t st_pos;
+static void st_put(uint32_t st)
+{
+    const uint8_t *m = FM1_ENC[0];
+    fm1_in.raw[m[0]] = (uint8_t)((fm1_in.raw[m[0]] & ~(1u << m[1])) | ((st >> 1) & 1u) << m[1]);
+    fm1_in.raw[m[2]] = (uint8_t)((fm1_in.raw[m[2]] & ~(1u << m[3])) | (st & 1u) << m[3]);
+}
+static void st_frames(uint32_t n) { while (n--) { st_put(ST_CW[st_pos & 3u]); fm1__frame(); } }
+static void st_move(int dir, uint32_t hold) { st_pos = (st_pos + (dir > 0 ? 1u : 3u)) & 3u; st_frames(hold); }
+static void st_click(int dir, uint32_t hold) { int i; for (i = 0; i < 4; i++) st_move(dir, hold); }
+static int32_t st_take(void) { int32_t s = fm1_in.enc_steps[0]; fm1_in.enc_steps[0] = 0; return s; }
+static void st_reset(void) { reset(); st_pos = 0; st_frames(50); }
+
 int main(void)
 {
     {   /* #63 a still knob: one contact chattering (states 0 <-> 1 or 0 <-> 2), or both lost together (0 <-> 3) */
@@ -165,6 +183,37 @@ int main(void)
             bad += s1 != 8 || en_run(t + 20000u) != 2;
         }
         check("#126 120 detents/s, bouncing 0.2 ms: 8 right then 6 left at once -> 8, then 2", !bad);
+    }
+    {   /* Clipper's cases: the knob's state set frame by frame (one sample a frame, ~1.1 ms) */
+        uint32_t k;
+        int32_t s;
+        st_reset();
+        for (k = 0; k < 10u; k++) { st_click(1, 6); st_frames(30); }
+        check("state by state: 10 slow clicks clockwise: +10", st_take() == 10);
+        for (k = 0; k < 10u; k++) { st_click(-1, 6); st_frames(30); }
+        check("state by state: 10 slow clicks anticlockwise: -10", st_take() == -10);
+        for (k = 0; k < 24u; k++) st_click(1, 2);
+        st_frames(30);
+        check("state by state: 24 fast clicks (2 frames a transition): +24", st_take() == 24);
+        for (k = 0; k < 5u; k++) { st_move(1, 6); st_move(1, 45); st_move(1, 6); st_move(1, 30); }
+        check("state by state: 5 clicks with 50 ms pauses mid-click: +5", st_take() == 5);
+        for (k = 0; k < 5u; k++) { st_move(1, 6); st_move(1, 6); st_frames(200); st_move(1, 6); st_move(1, 30); }
+        check("state by state: 5 clicks held half-way 0.2 s: +5", st_take() == 5);
+        for (k = 0; k < 5u; k++) {
+            st_move(1, 1); st_move(-1, 1); st_move(1, 4);
+            st_move(1, 4); st_move(1, 1); st_move(-1, 1); st_move(1, 4); st_move(1, 30);
+        }
+        check("state by state: 5 clicks with contact bounce: +5", st_take() == 5);
+        st_move(1, 6); st_move(1, 6); st_move(-1, 6); st_move(-1, 30);
+        check("state by state: half a click and back: nothing", st_take() == 0);
+        for (k = 0; k < 6u; k++) { st_pos = (st_pos + 2u) & 3u; st_frames(1); st_pos = (st_pos + 2u) & 3u; st_frames(1); }
+        st_frames(30);
+        s = st_take();
+        check("state by state: 6 flicks seen as two-state jumps: never the wrong way", s >= 0 && s <= 6);
+        st_click(1, 6); st_frames(30); st_take();
+        st_move(1, 6); st_move(1, 1000);
+        for (k = 0; k < 4u; k++) { st_click(1, 6); st_frames(30); }
+        check("state by state: parked 1 s off the detent, then 4 clicks: 4 steps", st_take() == 4);
     }
     printf("%s\n", fails ? "ENC FAIL" : "ENC OK");
     return fails ? 1 : 0;

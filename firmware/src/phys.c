@@ -31,6 +31,9 @@ static const int32_t PHYS_GAIN[PM_COUNT] = {28000, 12000, 90000, 12000, 22000};
 
 typedef struct {
     uint8_t model;                              /* PM_* the state belongs to */
+    uint8_t dip;                                /* MODEL changed under the note: this block fades the old model out */
+    int32_t gp[3];                              /* STRUCTURE, DAMP, BOW as the voice has them (Q8), gliding to the knobs
+                                                 * (~3 ms: the models' coefficients never step) */
     union {
         px_modal_t m;                           /* MODAL, MEMB */
         px_string_t s;
@@ -79,12 +82,21 @@ static uint32_t phys_seed(voice_t *v)           /* (xorshift32 on the voice's ra
 }
 
 static uint32_t phys_model(const volatile int32_t *p) { return (uint32_t)clamp(p[0], 0, PM_COUNT - 1); }
+static void phys_knobs(phys_slot_t *S, const volatile int32_t *p, int now)   /* the knobs a quarter closer (now: there) */
+{
+    uint32_t k;
+    for (k = 0; k < 3u; k++) {
+        int32_t d = (clamp(p[k + 1u], 0, 127) << 8) - S->gp[k];
+        S->gp[k] += now || (d > -4 && d < 4) ? d : d >> 2;
+    }
+}
 
 static void phys_begin(voice_t *v)              /* a note from silence: from rest, struck (phys_note_on) */
 {
     phys_slot_t *S = &ph_slot[v - vc];
     uint32_t md = phys_model(trk[v->trk].p[ENG_PHYS]);
     phys_reset(S, md, phys_seed(v));
+    phys_knobs(S, trk[v->trk].p[ENG_PHYS], 1);
     if (md == PM_MODAL || md == PM_MEMB)
         S->u.m.trig = 1;
     else
@@ -114,12 +126,22 @@ static void phys_block(voice_t *v, const volatile int32_t *p, int32_t *mono, int
     phys_slot_t *S = &ph_slot[v - vc];
     uint32_t md = phys_model(p), i, f0 = voice_inc(v, VP16(v));
     int32_t y[CTL], ax[CTL], damp = amp1 - amp0;
-    int32_t strc = clamp(p[1], 0, 127) * 516, brit = PHYS_BRIT * 516, dmp = clamp(p[2], 0, 127) * 516;
-    int32_t pos = phys_model(p) == PM_SANTUR ? clamp(p[3],0,127) : PHYS_POS, k4 = clamp(p[3], 0, 127), bow = k4 * 206;   /* BOW: Dust at up to 0.4 */
+    int32_t strc, brit = PHYS_BRIT * 516, dmp, pos, k4, bow;
     int32_t acc = clamp(PHYS_ACC * PHYS_VEL * 4, 0, 65536);   /* ACC at the velocity, Q16 */
-    int32_t g = PHYS_GAIN[md], sh = bow && (md == PM_MODAL || md == PM_STRING) ? 18 : 20;   /* (bowed: x 4, as loud as
-                                                                                    * the other sources) */
-    if (S->model != md) {                       /* MODEL changed under a sounding note: struck anew */
+    int32_t g, sh, fade = 0;
+    phys_knobs(S, p, 0);
+    strc = (S->gp[0] * 516) >> 8, dmp = (S->gp[1] * 516) >> 8, k4 = S->gp[2] >> 8;
+    pos = md == PM_SANTUR ? k4 : PHYS_POS, bow = k4 * 206;   /* BOW: Dust at up to 0.4 */
+    g = PHYS_GAIN[md], sh = bow && (md == PM_MODAL || md == PM_STRING) ? 18 : 20;   /* (bowed: x 4, as loud as the
+                                                                                 * other sources) */
+    if (S->model != md && !S->dip) {            /* MODEL changed under a sounding note: the old one fades out over
+                                                 * this block (no cut), the new is struck at the next */
+        S->dip = 1;
+        md = S->model;
+        g = PHYS_GAIN[md], sh = bow && (md == PM_MODAL || md == PM_STRING) ? 18 : 20;
+        fade = 1;
+    } else if (S->model != md) {
+        S->dip = 0;
         phys_reset(S, md, phys_seed(v));
         if (md == PM_MODAL || md == PM_MEMB)
             S->u.m.trig = 1;
@@ -150,7 +172,7 @@ static void phys_block(voice_t *v, const volatile int32_t *p, int32_t *mono, int
         px_string_blk_t B;
         uint32_t f[PX_NSYMP];
         if (md == PM_SANTUR) {
-            int32_t spread = clamp(p[1], 0, 127) * 12 / 127;
+            int32_t spread = (S->gp[0] >> 8) * 12 / 127;
             for (i=0; i<PX_NSYMP; i++) f[i] = tuning_rate(f0, ((int32_t)i-1)*spread*2367/1000);
             /* SARDAB's reduced SIM-SANTUR design: a hammer burst into three detuned strings. */
             px_string_block(&B, &S->u.y.s, f0, 16384, brit, dmp, acc, 0, pos*516);
@@ -160,7 +182,7 @@ static void phys_block(voice_t *v, const volatile int32_t *p, int32_t *mono, int
             for(i=0;i<(uint32_t)CTL;i++) y[i]-=ax[i];
             break;
         }
-        phys_symp_pitches(v, p[1], VP16(v), f);
+        phys_symp_pitches(v, S->gp[0] >> 8, VP16(v), f);
         px_string_block(&B, &S->u.y.s, f0, 16384 - k4 * 129, brit, dmp, acc, 0, 0);   /* BUZZ: STRC 0.25 .. 0 */
         px_string_excite(&B, &S->u.y.s, ax, CTL);
         px_string_run(&B, &S->u.y.s, ax, y, CTL);
@@ -175,6 +197,8 @@ static void phys_block(voice_t *v, const volatile int32_t *p, int32_t *mono, int
             a = 24000 + (softclip(clamp(a - 24000, 0, 1 << 20) * 2) >> 1);
             s = s < 0 ? -a : a;
         }
+        if (fade)
+            s = (s * (int32_t)(CTL - i)) >> CTL_LOG2;
         mono[i] += mulq15(mulq15(s, amp_at(amp0, damp, (int32_t)i)), VOICE_LV) << 1;
     }
 }

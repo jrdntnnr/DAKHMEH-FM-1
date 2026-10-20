@@ -14,7 +14,9 @@
  *   right side 9 ms later -> the loop: a one-pole low-pass (WEAR: ~7 kHz .. ~1.2 kHz), FEEDBACK (0 .. 110 %), a tanh
  *   saturation (WEAR: 1x .. 1.8x drive, the level made up), the DC block -> back into the line with the input,
  *   through a soft knee: no sum can clip. Each repeat: darker, a little saturated, a little more wobbly.
- *   TIME glides to a new value (~50 ms): the pitch bends, as a tape's does.
+ *   TIME changed: the new tap fades in over the old one (DL_XF half-rate samples, ~46 ms; after Clipper's fx.c): no
+ *   bend, no step. (0.4: the read position glided, which read the tape at up to 20 x for a block: a sweep that
+ *   clicked.)
  *   MIX: the return (the echoes' level: the tracks' DLY sends set how much goes in); the echoes also go into the REV
  *   bus at that level: they fall into SPACE. Nothing runs at MIX 0, or once
  *   the line is all silence and nothing comes in.
@@ -30,13 +32,15 @@
 #define DL_W1 12467522u                         /* the wow: 0.5 Hz, a block's step (2^32 * 256 / 44100 * Hz) */
 #define DL_W2 4737658u                          /* .. and 0.19 Hz beside it: not quite periodic */
 #define DL_W3 152103765u                        /* the flutter: 6.1 Hz */
+#define DL_XF 1024u                             /* TIME's cross-fade, half-rate samples (46 ms) */
 _Static_assert(77175u + 51u + 198u + 2u < DL_LEN, "DELAY: the longest read stays in the line");
 
 static int16_t dl_buf[DL_LEN] __attribute__((section(".pool")));
 static struct {
     uint32_t w, quiet;                          /* the write index; half-rate samples with silence in and written */
     uint32_t p1, p2, p3;                        /* the wow's and the flutter's phases */
-    int32_t d, m;                               /* TIME gliding to its target, the wow at the block's end (Q8 samples) */
+    int32_t d, dn, m;                           /* TIME's tap, the one fading in (Q8 samples), the wow at the block's end */
+    uint32_t xf;                                /* the fade's position, 1 .. DL_XF (0: none running) */
     int32_t x, lp, le, dc, de, ml, mr;          /* the input's last sample; the loop's low-pass and DC block (and
                                                  * their steps' remainders); the last wet out, left / right */
     int32_t l[DL_NC], r[DL_NC];                 /* the block's echoes at half the rate */
@@ -63,7 +67,8 @@ static void tape_render(const int32_t *in, int32_t *out, int32_t *rev, uint32_t 
 {
     uint32_t i, any = 0, w;
     int32_t mix = dl_mix, wear = dl_wear, fbk = dl_fb;
-    int32_t target, d0, d1, m1, a, tc, g, ig, fb;
+    int32_t target, d0, m1, a, tc, g, ig, fb;
+    uint32_t xf;
     int32_t xp = dl.x, lp = dl.lp, le = dl.le, dc = dl.dc, de = dl.de, ml = dl.ml, mr = dl.mr;
     if (n != 2u * DL_NC || mix <= 0)
         return;                                 /* MIX 0: the dry alone; the line waits as it is */
@@ -74,13 +79,14 @@ static void tape_render(const int32_t *in, int32_t *out, int32_t *rev, uint32_t 
     wear = clamp(wear, 0, 127);
     fbk = clamp(fbk, 0, 127);
 
-    /* this block's settings: TIME (gliding), the wow, the loop's tone, drive and feedback */
+    /* this block's settings: TIME (a new one fades in), the wow, the loop's tone, drive and feedback */
     target = (int32_t)DL_MS[clamp(dl_time, 0, 127)] * 5645;   /* ms -> Q8 samples at 22.05 kHz */
     if (!dl.d)
-        dl.d = target;                          /* (the first block: no glide from nothing) */
+        dl.d = target;                          /* (the first block: no fade from nothing) */
+    if (!dl.xf && target != dl.d)
+        dl.dn = target, dl.xf = 1;              /* (changed again mid-fade: after this fade) */
     d0 = dl.d;
-    d1 = d0 + ((target - d0) >> 3);             /* ~50 ms to a new TIME */
-    dl.d = d1;
+    xf = dl.xf;
     dl.p1 += DL_W1, dl.p2 += DL_W2, dl.p3 += DL_W3;
     a = (10 + wear) * 94;                       /* the wow's reach, Q8 samples: ~0.17 .. ~2.3 ms */
     m1 = wear_wow(dl.p1, dl.p2, dl.p3, a);      /* (wear.c) */
@@ -91,14 +97,21 @@ static void tape_render(const int32_t *in, int32_t *out, int32_t *rev, uint32_t 
 
     w = dl.w;
     {
-        int32_t D0 = d0 + dl.m, dD = (d1 + m1) - D0;
+        int32_t M0 = dl.m, dM = m1 - M0, dn = dl.dn;
         for (i = 0; i < DL_NC; i++) {
-            int32_t x = (xp + 2 * in[2u * i] + in[2u * i + 1u]) >> 2, D = D0 + ((dD * (int32_t)i) >> 7);
-            int32_t y = tape_read(w, D), v, e;
+            int32_t x = (xp + 2 * in[2u * i] + in[2u * i + 1u]) >> 2, M = M0 + ((dM * (int32_t)i) >> 7);
+            int32_t y = tape_read(w, d0 + M), r = tape_read(w, d0 + M + DL_SPREAD), v, e;
             xp = in[2u * i + 1u];
             x = mulq15(clamp(x, -65535, 65535), DL_IN);
+            if (xf) {                           /* the new TIME's tap fading in */
+                int32_t yn = tape_read(w, dn + M), rn = tape_read(w, dn + M + DL_SPREAD);
+                y += ((yn - y) * (int32_t)xf) >> 10;
+                r += ((rn - r) * (int32_t)xf) >> 10;
+                if (++xf > DL_XF)
+                    d0 = dn, xf = 0;
+            }
             dl.l[i] = y;
-            dl.r[i] = tape_read(w, D + DL_SPREAD);
+            dl.r[i] = r;
             e = (y - lp) * tc + le, le = e & 32767, lp += e >> 15;          /* darker each time round */
             v = sh_tz(lp * fb, 15);                                         /* FEEDBACK */
             v = wear_sat(v, g, ig);                                         /* the tape's saturation (wear.c) */
@@ -109,7 +122,7 @@ static void tape_render(const int32_t *in, int32_t *out, int32_t *rev, uint32_t 
             if (++w == DL_LEN) w = 0;
         }
     }
-    dl.w = w, dl.m = m1, dl.x = xp, dl.lp = lp, dl.le = le, dl.dc = dc, dl.de = de;
+    dl.w = w, dl.m = m1, dl.d = d0, dl.xf = xf, dl.x = xp, dl.lp = lp, dl.le = le, dl.dc = dc, dl.de = de;
 
     /* back to 44.1 kHz, between samples, at the return's level (MIX), into out and into the REV bus */
     {
