@@ -25,7 +25,7 @@
         "frames": 33164
       }
     ],
-    "sha256": "ff1efaadb50a7e116dcc70c05a68696fa6e116c78a8f6196022ac66f6631aa01"
+    "sha256": "eef172ed1e7d93a0d56b74ce5682f8f7b9800513c1853add27c4221c586f5f5b"
   },
   {
     "name": "QANUN",
@@ -71,7 +71,7 @@
         "frames": 23146
       }
     ],
-    "sha256": "c639478cdbaf6f65276b4e5ab7f10f1593126ea8b85b157dbc20d2351d0eb377"
+    "sha256": "742e0c3a476811ff4f7292712006e120db7a40882fd6d880a4f21860e5aefb44"
   },
   {
     "name": "NEY AIR",
@@ -99,7 +99,7 @@
         "frames": 14198
       }
     ],
-    "sha256": "d0a8d931141466c45d13ceb4a1b6e5d59336285284eb3595898f4f2c6d75f7d2"
+    "sha256": "17e33fd70eeaf8e8e58cbec5519319fbf2f58053c0cbfcceae70254add8e4c79"
   },
   {
     "name": "TAR",
@@ -133,6 +133,6 @@
         "frames": 36608
       }
     ],
-    "sha256": "846166020978c17f529f91df3a8e6a9bf640d140fdfe030959a34f8974ebd5ae"
+    "sha256": "2e8d734d74a2f8cbc18b4ed2e5f02411a5336e805e0ee144202d76ccb89e8c25"
   }
 ]
