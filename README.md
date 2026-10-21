@@ -28,7 +28,8 @@ Custom firmware for the **M-VAVE FM-1**, built on [GR!MM](https://github.com/GRi
 | Instruments | the GR!MM factory sounds | DESERT category with 12 presets: oud, qanun, two santurs, ney, mijwiz, arghul, rababa, plus 4 sampled banks (oud, qanun, ney air, tar) |
 | Polyphony | 6 voices | 12 shared voices, rendered on both cores (the tracks shared out each control step; the output the same bit for bit) |
 | Reverb | HALL | HALL, and Clipper's Dattorro plate as PLATE, CAVERN and SHIMMER (SPACE 2: TYPE) |
-| Clicks | — | A test turns every knob under a chord and looks for a step: DELAY TIME cross-fades, VOICE's and PHYS's knobs glide |
+| Clicks | — | A test turns every knob under a chord and looks for a step: DELAY TIME cross-fades, VOICE's and PHYS's knobs glide; a sine held through each reverb, and each driven at full scale |
+| Samples | IMA ADPCM | The same format; the banks encoded with GR!MM's look-ahead (each code chosen for the sample and the next two): no crackle on the plucks |
 | Velocity | none | From keys (SENSE curves; FIXED by default), MIDI, steps and the arp. Each step keeps its own velocity, set on the STEP page |
 | CANON | none | A second playhead half the pattern behind, a scale interval away or played backwards (ARP's second page) |
 | DREAM | none | Press a key to compose an ambient piece across all four tracks. MOOD MAQAM carries the selected track's maqam and tuning (GLO's second page) |
@@ -44,7 +45,7 @@ Most of the maqam, tuning and desert work, velocity, CANON, DREAM, TRILL and DRO
 - **[Installer](https://jrdntnnr.github.io/DAKHMEH-FM-1/install.html)**: Chrome or Edge, FM-1 connected by USB. Back up first with the [editor](https://jrdntnnr.github.io/DAKHMEH-FM-1/editor.html).
 - **[Releases](https://github.com/jrdntnnr/DAKHMEH-FM-1/releases)**: the `.fwsc` package for `tools/fm1_install.py`.
 
-**Pre-release (0.5.1).** The target build, emulator and installer tests pass. 0.4.2 ran on an FM-1; the second core has not: it is started at power-on, proved with a self-test and, should it fail or run late, the FM-1 falls back to one core (SYSTEM's header says 2C or 1C). Existing SARDAB projects need conversion.
+**Pre-release (0.5.2).** The target build, emulator and installer tests pass. 0.4.2 ran on an FM-1; the second core has not: it is started at power-on, proved with a self-test and, should it fail or run late, the FM-1 falls back to one core (SYSTEM's header says 2C or 1C). Existing SARDAB projects need conversion.
 
 [Controls & status](docs/PORT.md) · [Build & run](docs/BUILDING.md) · [Screenshots](docs/screens/dakhmeh/README.md) · [Instrument sources](assets/desert/README.md)
 

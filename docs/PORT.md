@@ -256,3 +256,19 @@ and tuning tests passed after rebranding. Compatibility format identifiers
   are transients by design and exempt.
 - **PRE-DELAY's text** (0.5.1) follows the TYPE: HALL's 0 .. 250 ms, the plate family's 0 .. 54 (CAVERN and
   SHIMMER 18 more).
+
+### The plate's left tap, the samples' encoder (0.5.2)
+
+- **The plate crackled on the left** (Clipper e674655, the day after the port): its left output read the AA
+  diffuser 1417 samples back on a 1334-sample line (Dattorro's tap 1913 on an 1800-sample line, x 0.741): past
+  the line's end, the index wrapping into the line before, a click each turn of the line (~60 ms), the left only.
+  Now 1250, the same share of its line as the right's AB tap (`hall.c` `PL_AA_TAP_L`). HALL never had it.
+  `clean_test` now holds a sine through each type (the left's largest second difference 50 x its rms before, 4
+  after; the right 5) and drives each at the send's clamp with DAMP 0 (the return bounded, its tail falling):
+  Clipper's room reverb overflowed there; ours do not.
+- **The samples' encoder** is GR!MM c597223's look-ahead IMA ADPCM (`tools/sampleio.py`, `web/editor_core.js`):
+  each code the one whose sample and the next two decode closest. The standard choice follows a steep edge too
+  slowly, a crackle on plucks. Same format, same decoder; the four desert banks re-encoded (the worst sample error:
+  NEY AIR 6855 -> 1528, QANUN 3639 -> 1849, TAR 3110 -> 1579, OUD 467 -> 464). **A device already holding the
+  banks keeps its old ones**: occupied slots are retained at boot; the editor's Samples > Restore factory samples
+  writes the new.

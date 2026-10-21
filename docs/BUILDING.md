@@ -42,7 +42,7 @@ much RAM, a register touched outside `firmware/hal/`. [RULES.md](RULES.md) says 
 
 ```sh
 tests/run_host.sh                           # -> build/host/grimm.wav and screen PNGs; then tests/enc_test.c (the knobs' decoder),
-                                            #    tests/clean_test.c (no clicks: every knob under a chord) and tests/split_test.c
+                                            #    tests/clean_test.c (no clicks: every knob under a chord; the reverbs held and driven) and tests/split_test.c
                                             #    (the second core's share: one core and two the same, bit for bit, in four modes)
 tests/stress.sh 1                           # the stress test (seeds 1, 2, 3), with address and undefined-behaviour checks
 ```
@@ -60,7 +60,7 @@ node web/test_web.mjs                       # after tests/run_host.sh: the brows
 cd web/dist && python3 -m http.server 8000  # then open http://localhost:8000/ (or /editor.html)
 ```
 
-The browser build, host mode and the firmware all show the version in `VERSION` (0.5.1); `APP_VER=… web/build_web.sh` overrides it for one build.
+The browser build, host mode and the firmware all show the version in `VERSION` (0.5.2); `APP_VER=… web/build_web.sh` overrides it for one build.
 
 ## The site: emulator, editor, installer (GitHub Pages)
 
