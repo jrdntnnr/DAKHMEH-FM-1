@@ -530,17 +530,24 @@ static int ui_in(int32_t x, int32_t y, int32_t w, int32_t h)   /* does (x, y, w,
  * lit, from the main loop: what the audio ISR left in vis_pk, vis_lr (its peaks). Only what changed is drawn.
  *   stars: the sky's pixels, a few at a time brighten to light and fade back; more of them the louder it is
  *   dunes: a far ridge (dark) and a near one (black), still
- *   lanterns: one a track, standing on the near sand. LEVEL the most its flame can be (muted, LEVEL 0: out, the
- *   glass dark); a silent track's burns low, a shape now and then; a sounding one's grows with its peak, dances (a
- *   row up or down) and flickers (three shapes, uneven) */
+ *   nazars (cheshm nazar): a glass eye a track, hung over the near sand. LEVEL the most it can open (muted, LEVEL 0:
+ *   dead glass); a silent track's is open a little and blinks now and then; a sounding one's white and iris widen
+ *   with its peak and its pupil wanders. The eyes are the one cold thing in the picture: their own glass blues */
 #define NSTAR 46u
-#define LN_Y 126                                /* the lanterns: their top; track t's left edge LN_X(t); 7 x LN_ROWS cells
+#define NZ_Y 132                                /* the eyes: the disc's top; track t's left edge NZ_X(t); NZ_D px across
                                                  * (the slabs under them name the tracks) */
-#define LN_X(t) (26 + (t) * 54)
-#define LN_ROWS 8
+#define NZ_X(t) (27 + (t) * 54)
+#define NZ_D 26
+#define NZ_HALO_H 5                             /* the pool of light under an open eye: rows below the disc */
+#define NZ_GLASS RGB(18, 52, 150)               /* cobalt */
+#define NZ_IRIS RGB(80, 160, 225)               /* the sky in it */
+#define NZ_DARK RGB(6, 20, 60)                  /* the glass in the dark */
+#define NZ_BLINK_N 6u                           /* frames of a blink: the lid down over three, up over three */
 static uint8_t sk_x[NSTAR], sk_y[NSTAR], sk_b[NSTAR], sk_ph[NSTAR], sk_ok;   /* a star: where, M (else D), its sparkle's
                                                  * frame (0: none) */
-static uint8_t cn_h[NT], cn_s[NT], cn_n[NT];    /* a lantern: its flame's rows (0: out), shape, frames to its next shape */
+static uint8_t cn_h[NT], cn_s[NT], cn_n[NT];    /* an eye: how open (0: dead .. 4), its gaze (0 .. 4: the pupil NZ_GAZE), frames to
+                                                 * its next gaze */
+static uint8_t cn_b[NT], cn_bn[NT];             /* an eye: its blink's frame (0: open), frames to its next blink */
 static uint32_t an_rng = 0x2545F491u, an_e[NT], an_n;
 static uint32_t an_rnd(uint32_t n)
 {
@@ -580,30 +587,59 @@ static void pic_dunes(void)
         ui_rect(x, yn, 4, 164 - yn, UI_K);
     }
 }
-static void pic_lantern(int32_t t)              /* lantern t, 4 px a cell: an oil lamp, its glass 5 x 4 cells with
-                                                 * the flame (cn_h rows from the wick, shape cn_s), dark glass around it */
+/* the eye, row by row: the disc NZ_D across, its centre between pixels, so everything is measured in half pixels
+ * from it (X = 2 x + 1 - NZ_D): a ring of radius r2 half pixels holds the pixels with X^2 + Y^2 <= r2^2. How open
+ * (cn_h, 0 .. 4) sets the white, the iris and the pupil; the gaze moves the iris and pupil sideways */
+static const uint8_t NZ_WHITE[5] = {0, 9, 12, 15, 18};      /* the white's radius, half pixels (0: dead glass) */
+static const uint8_t NZ_IRIS_R[5] = {0, 5, 7, 9, 11};
+static const uint8_t NZ_PUPIL[5] = {0, 3, 4, 5, 6};
+static const int8_t NZ_GAZE[5] = {-4, -2, 0, 2, 4};         /* the pupil's offset a gaze, pixels */
+static int32_t nz_half(int32_t r2, int32_t Y)   /* the largest X with X^2 + Y^2 <= r2^2 (-1: the row is outside) */
 {
-    static const char *const FLAME[3][4] = {{"..a..", ".aaa.", ".ala.", ".lwl."}, {"..a..", "..aa.", ".ala.", ".lwl."},
-                                            {"..a..", ".aa..", ".ala.", ".lwl."}};
-    static const char *const FRAME[LN_ROWS] = {".mmmmm.", "d.....d", "d.....d", "d.....d", "d.....d", ".mmmmm.", "..mmm..",
-                                               ".mmmmm."};
-    int32_t x = LN_X(t), y = LN_Y, r, c, h = cn_h[t];
-    if (!ui_in(x, y, 28, 32)) return;
-    ui_sprite(x, y, 4, FRAME, LN_ROWS);
-    for (r = 0; r < 4; r++)
-        for (c = 0; c < 5; c++) {
-            char ch = r >= 4 - h ? FLAME[cn_s[t] % 3u][r][c] : '.';
-            ui_rect(x + 4 + c * 4, y + 4 + r * 4, 4, 4, ch == '.' ? UI_K : ui_col(ch));
-        }
+    int32_t q = r2 * r2 - Y * Y, X;
+    if (q < 0) return -1;
+    for (X = 0; (X + 2) * (X + 2) <= q; X += 2) {}
+    return X;
 }
-static void pic_home(void)                      /* Main: the stars, the dunes, a lantern a track */
+static void nz_run(int32_t x, int32_t y, int32_t r2, int32_t Y, int32_t dx, uint16_t col)   /* the pixels of ring r2 on
+                                                 * row Y, centred dx pixels right of the disc's */
+{
+    int32_t X = nz_half(r2, Y);
+    if (X < 0) return;
+    ui_rect(x + NZ_D / 2 + dx - (X + 1) / 2, y, X + 1, 1, col);   /* X half pixels each side: X + 1 pixels */
+}
+static void pic_nazar(int32_t t)
+{
+    int32_t x = NZ_X(t), y = NZ_Y, h = cn_h[t], gz = NZ_GAZE[cn_s[t] % 5u], b = cn_b[t], r, w2 = NZ_WHITE[h];
+    int32_t lid = b ? -w2 + (int32_t)(b > 3u ? NZ_BLINK_N - b : b) * (2 * w2 + 2) / 3 : -w2 - 1;   /* the lid's
+                                                 * lower edge, half pixels (rows above it are glass) */
+    if (!ui_in(x - 20, y - 4, NZ_D + 40, NZ_D + 4 + NZ_HALO_H)) return;
+    if (h) {                                    /* the pool of light on the sand, wider the more open */
+        int32_t hw = NZ_D + 8 + 6 * h;
+        for (r = 0; r < NZ_HALO_H; r++) {
+            int32_t w = hw * (NZ_HALO_H - r) / NZ_HALO_H;
+            w = r == 0 ? hw * 3 / 4 : w;        /* (the top row narrow: it tucks under the disc) */
+            ui_rect(x + NZ_D / 2 - w / 2, y + NZ_D + r, w, 1, NZ_DARK);
+        }
+    }
+    ui_rect(x + NZ_D / 2 - 1, y - 4, 2, 4, UI_M);   /* the cord */
+    for (r = 0; r < NZ_D; r++) {
+        int32_t Y = 2 * r + 1 - NZ_D;
+        nz_run(x, y + r, NZ_D - 1, Y, 0, h ? NZ_GLASS : NZ_DARK);
+        if (!h || Y < lid) continue;
+        nz_run(x, y + r, w2, Y, 0, UI_W);
+        nz_run(x, y + r, NZ_IRIS_R[h], Y, gz, NZ_IRIS);
+        nz_run(x, y + r, NZ_PUPIL[h], Y, gz, UI_K);
+    }
+}
+static void pic_home(void)                      /* Main: the stars, the dunes, an eye a track */
 {
     uint32_t i;
     int32_t t;
     if (!sk_ok) sk_init();
     for (i = 0; i < NSTAR; i++) ui_rect(sk_x[i] * 3, 27 + sk_y[i] * 3, 3, 3, sk_col(i));
     pic_dunes();
-    for (t = 0; t < (int32_t)NT; t++) pic_lantern(t);
+    for (t = 0; t < (int32_t)NT; t++) pic_nazar(t);
 }
 static void ui_pic_draw(void);
 static void ui_home_part(int32_t x, int32_t y, int32_t w, int32_t h) { ui_region(x, y, w, h, UI_K, ui_pic_draw); }
@@ -617,26 +653,28 @@ static void ui_home_frame(int draw)             /* a frame of HOME's picture (dr
     loud = loud > 256u ? 256u : loud;
     if (!sk_ok) sk_init();
 
-    for (t = 0; t < NT; t++) {                  /* the lanterns */
+    for (t = 0; t < NT; t++) {                  /* the eyes */
         uint32_t e = pk[t] / 96u, lv = trk[t].level <= 0 || (trk_quiet >> t & 1u) ? 0u : (ui_pc(trk[t].level) + 24u) / 25u;
-        uint32_t h, s = cn_s[t], lo = lv < 2u ? lv : 2u;
+        uint32_t h, s = cn_s[t], b = cn_b[t], lo = lv < 2u ? lv : 2u;
         e = e > 256u ? 256u : e;
         an_e[t] = e >= an_e[t] ? e : an_e[t] - (an_e[t] + 5u) / 6u;   /* (up at once, down over ~0.3 s) */
-        if (an_e[t] < 6u) h = lo;               /* (silent: low) */
+        if (an_e[t] < 6u) h = lo;               /* (silent: open a little) */
         else {
             h = lo + ((lv - lo) * an_e[t] + 128u) / 256u;
-            if (!an_rnd(3) && h < lv) h++;      /* (the dance) */
+            if (!an_rnd(3) && h < lv) h++;      /* (it widens and narrows with the sound) */
             else if (!an_rnd(4) && h > lo) h--;
         }
-        if (!cn_n[t] || !--cn_n[t]) {           /* (a new shape, at uneven times: sounding often, silent seldom) */
-            s = (s + 1u + an_rnd(2)) % 3u;
-            cn_n[t] = (uint8_t)(an_e[t] >= 6u ? 1u + an_rnd(3) : 6u + an_rnd(14));
+        if (!cn_n[t] || !--cn_n[t]) {           /* (a new gaze, held a while: sounding, it darts; silent, it rests) */
+            s = an_e[t] >= 6u ? an_rnd(5) : 2u + an_rnd(3) - 1u;
+            cn_n[t] = (uint8_t)(an_e[t] >= 6u ? 4u + an_rnd(12) : 30u + an_rnd(60));
         }
-        if (h != cn_h[t] || (s != cn_s[t] && h > 2u)) {
-            cn_h[t] = (uint8_t)h, cn_s[t] = (uint8_t)s;
-            if (draw) ui_home_part(LN_X((int32_t)t) + 4, LN_Y + 4, 20, 16);
+        if (b) b = b >= NZ_BLINK_N ? 0u : b + 1u;   /* (a blink under way) */
+        else if (!cn_bn[t]) cn_bn[t] = (uint8_t)(20u + an_rnd(150));   /* (the first: each eye its own time) */
+        else if (!--cn_bn[t]) b = 1u, cn_bn[t] = (uint8_t)(50u + an_rnd(120));   /* (3 .. 9 s apart) */
+        if (h != cn_h[t] || s != cn_s[t] || b != cn_b[t]) {
+            cn_h[t] = (uint8_t)h, cn_s[t] = (uint8_t)s, cn_b[t] = (uint8_t)b;
+            if (draw) ui_home_part(NZ_X((int32_t)t) - 20, NZ_Y, NZ_D + 40, NZ_D + NZ_HALO_H);
         }
-        cn_s[t] = (uint8_t)s;
     }
 
     for (i = 0; i < NSTAR; i++)                 /* the stars: the sparkling ones on; new ones (louder: more) */

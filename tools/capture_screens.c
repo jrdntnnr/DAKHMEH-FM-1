@@ -24,7 +24,7 @@ int main(void)
     for(k=0;k<100;k++)app_audio(audio,VB);
     shot("desert-oud",PG_SOUND);
     trk[1].level=90;trk[2].level=60;trk[3].level=110;shot("home",PG_HOME);
-    for(k=0;k<NT;k++)an_e[k]=256;cn_s[1]=1;cn_s[3]=2;shot("home",PG_HOME);   /* (the lanterns burning) */
+    for(k=0;k<NT;k++)an_e[k]=256;cn_s[0]=4;cn_s[1]=0;cn_s[3]=1;shot("home",PG_HOME);   /* (the eyes open, looking about) */
     shot("mixer",PG_MIX1);                       /* (its meters: the peaks since the page opened) */
     note_on(0,7,60,SRC_KEY,0,-1,127);note_on(1,9,62,SRC_KEY,0,-1,100);
     for(k=0;k<12;k++)app_audio(audio,VB);
