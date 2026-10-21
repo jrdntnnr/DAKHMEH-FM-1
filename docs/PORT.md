@@ -215,8 +215,8 @@ and tuning tests passed after rebranding. Compatibility format identifiers
 - **COLOUR DESERT** (SYSTEM): SARDAB's palette, obsidian to bone with copper for the active thing, as a fifth
   theme beside GR!MM's four accents; a fresh device starts on it, a saved COLOUR is kept. The editor accepts
   settings with COLOUR 0..4 (`editor.c`).
-- **HOME**: a night over the dunes. The stars sparkle with the output; a lantern a track burns with its level and
-  peak (muted or LEVEL 0: dark glass). GR!MM's eye and candles are gone. Drawn as before: a frame every
+- **HOME**: a night over the dunes. The stars sparkle with the output; a cheshm nazar a track (0.5.3; 0.4 .. 0.5.2:
+  a lantern) opens with its level and peak (muted or LEVEL 0: dead glass). GR!MM's eye and candles are gone. Drawn as before: a frame every
   `UI_ANIM_MS`, only the cells that changed (`ui_home_frame`).
 - **Tuning rail** (SCALE, CHORD, TUNE, TUNING, TASHRIQ): under the keys, a datum with every in-scale key's cents off
   12-TET as a tick (up sharp, down flat, 3 px a hundred cents, a dot in tune) and the root as a diamond.
@@ -256,6 +256,16 @@ and tuning tests passed after rebranding. Compatibility format identifiers
   are transients by design and exempt.
 - **PRE-DELAY's text** (0.5.1) follows the TYPE: HALL's 0 .. 250 ms, the plate family's 0 .. 54 (CAVERN and
   SHIMMER 18 more).
+
+### Cheshm nazar (0.5.3)
+
+- **HOME's lanterns are glass eyes** (`ui.c` `pic_nazar`), the amulet against the evil eye. One a track, hung over
+  the near sand: LEVEL the most it can open (muted, LEVEL 0: dead glass), a silent track's open a little, blinking
+  every 3 .. 9 s, each on its own time; a sounding one's white and iris widen with its peak and its pupil darts
+  about and holds. Drawn at 1 px as row runs (the disc's centre between pixels: everything measured in half
+  pixels), in two glass blues and a dark one of their own: the DESERT palette has no blue, and the nazar is the
+  one cold thing in the picture. The same blues on every COLOUR. A pool of light on the sand under an open eye.
+  The 4 px lamps were too coarse to read as anything.
 
 ### The plate's left tap, the samples' encoder (0.5.2)
 

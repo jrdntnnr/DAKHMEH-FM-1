@@ -35,7 +35,7 @@ Custom firmware for the **M-VAVE FM-1**, built on [GR!MM](https://github.com/GRi
 | DREAM | none | Press a key to compose an ambient piece across all four tracks. MOOD MAQAM carries the selected track's maqam and tuning (GLO's second page) |
 | Arp modes | UP, DOWN, UP-DOWN, RANDOM, AS PLAYED, CHORD | Adds TRILL (each note, then its scale neighbour up) and DRONE (the lowest key keeps sounding) |
 | Install | command line | [Browser installer](https://jrdntnnr.github.io/DAKHMEH-FM-1/install.html) as well as `tools/fm1_install.py` |
-| Look | GR!MM's warm greys, red accent; HOME: stars, an eye, candles | DESERT colours (obsidian, sandstone, bone, copper) as a fifth COLOUR and a fresh device's; HOME: a night over the dunes, a lantern a track burning with it; a tuning rail under the maqam keyboard (the root a diamond, each degree's cents); MIXER meters; names too long for their place scroll; the keys light the scale on the maqam pages, breathe while DREAM plays, follow CANON, and a light runs them at boot |
+| Look | GR!MM's warm greys, red accent; HOME: stars, an eye, candles | DESERT colours (obsidian, sandstone, bone, copper) as a fifth COLOUR and a fresh device's; HOME: a night over the dunes, a cheshm nazar a track, its eye opening with the level and wandering with the sound; a tuning rail under the maqam keyboard (the root a diamond, each degree's cents); MIXER meters; names too long for their place scroll; the keys light the scale on the maqam pages, breathe while DREAM plays, follow CANON, and a light runs them at boot |
 
 Most of the maqam, tuning and desert work, velocity, CANON, DREAM, TRILL and DRONE come from SARDAB (GHOULBOX on Felucca). The second core's HAL is X0X's by way of SLOOP and Clipper; the plate reverb and the click test's design are Clipper's.
 
@@ -45,7 +45,7 @@ Most of the maqam, tuning and desert work, velocity, CANON, DREAM, TRILL and DRO
 - **[Installer](https://jrdntnnr.github.io/DAKHMEH-FM-1/install.html)**: Chrome or Edge, FM-1 connected by USB. Back up first with the [editor](https://jrdntnnr.github.io/DAKHMEH-FM-1/editor.html).
 - **[Releases](https://github.com/jrdntnnr/DAKHMEH-FM-1/releases)**: the `.fwsc` package for `tools/fm1_install.py`.
 
-**Pre-release (0.5.2).** The target build, emulator and installer tests pass. 0.4.2 ran on an FM-1; the second core has not: it is started at power-on, proved with a self-test and, should it fail or run late, the FM-1 falls back to one core (SYSTEM's header says 2C or 1C). Existing SARDAB projects need conversion.
+**Pre-release (0.5.3).** The target build, emulator and installer tests pass. 0.4.2 ran on an FM-1; the second core has not: it is started at power-on, proved with a self-test and, should it fail or run late, the FM-1 falls back to one core (SYSTEM's header says 2C or 1C). Existing SARDAB projects need conversion.
 
 [Controls & status](docs/PORT.md) · [Build & run](docs/BUILDING.md) · [Screenshots](docs/screens/dakhmeh/README.md) · [Instrument sources](assets/desert/README.md)
 
