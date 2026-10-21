@@ -62,6 +62,7 @@ enum { PL_AP1, PL_AP2, PL_AP3, PL_AP4, PL_MA, PL_DA1, PL_AA, PL_DA2, PL_MB, PL_D
 static const uint16_t PL_LEN[PL_N] = {105, 79, 281, 205, 498 + PL_EXC + 2, 3299, 1334, 2756, 673 + PL_EXC + 2, 3124,
                                       1968, 2343, PL_PRE_LEN};
 #define PL_TOTAL (105u + 79u + 281u + 205u + 512u + 3299u + 1334u + 2756u + 687u + 3124u + 1968u + 2343u + PL_PRE_LEN)
+#define PL_AA_TAP_L 1250u                       /* the left output's AA tap: inside the 1334-sample line (see plate_step) */
 #define PS_LEN 1024u                            /* the octave's line: 46 ms */
 #define PS_WIN 896u                             /* the window its taps sweep, samples */
 #define SH_DECAY 27000                          /* SHIMMER: the decay and the damping capped (the octaves pile up) */
@@ -337,7 +338,11 @@ static void plate_step(int32_t x, int32_t decay, int32_t damp, uint32_t pre, int
     pl_put(PL_DB2, b);
     RVP.end[0] = pl_tap(PL_DA2, PL_LEN[PL_DA2]);
     RVP.end[1] = pl_tap(PL_DB2, PL_LEN[PL_DB2]);
-    *yl = pl_tap(PL_DA1, 197) + pl_tap(PL_DA1, 2203) - pl_tap(PL_AA, 1417) + pl_tap(PL_DA2, 1479) -
+    /* (Clipper e674655: the left crackled) the paper's tap 1913 on its 1800-sample diffuser is past the line's end:
+     * x 0.741 it read 1417 back on a 1334-sample line, 83 samples old or (the index wrapping) the line before's: a
+     * click a turn of the line, on the left only. Read inside it, the same share of the line as the right's AB
+     * 910 / 1968 tap: 1250 */
+    *yl = pl_tap(PL_DA1, 197) + pl_tap(PL_DA1, 2203) - pl_tap(PL_AA, PL_AA_TAP_L) + pl_tap(PL_DA2, 1479) -
           pl_tap(PL_DB1, 1474) - pl_tap(PL_AB, 139) - pl_tap(PL_DB2, 790);
     *yr = pl_tap(PL_DB1, 262) + pl_tap(PL_DB1, 2687) - pl_tap(PL_AB, 910) + pl_tap(PL_DB2, 1980) -
           pl_tap(PL_DA1, 1564) - pl_tap(PL_AA, 248) - pl_tap(PL_DA2, 90);

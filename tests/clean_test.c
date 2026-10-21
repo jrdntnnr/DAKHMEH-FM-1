@@ -11,6 +11,7 @@
 #include "../firmware/src/grimm.c"
 #undef main
 #include <stdio.h>
+#include <math.h>
 
 #define NCAP (VB * 600u)
 #define JUMP_FLOOR 400                          /* the spike a step makes that we care about (~-38 dBFS) */
@@ -132,6 +133,87 @@ static void ch_knob(uint32_t j)                  /* the engine's four knobs, eac
     trk[0].p[eng_now][k] = j & 1u ? ENGINES[eng_now]->max[k] : 0;
 }
 
+/* (after Clipper e674655: PLATE, HALL and SHIMMER crackled on the left, an output tap read outside its line) a sine
+ * at 440 Hz, steady, through each type: no click (the largest second difference within 12 x its rms), the left as
+ * smooth as the right (neither rms 2.5 x the other). A click each turn of a line does not show under a chord's own
+ * motion; it does here. */
+#define SINE_BLOCKS 2400u
+#define SINE_SKIP 1400u                         /* the tank filling, the fade from the last type */
+#define SINE_AMP 20000.0
+#define SINE_MAX_OVER_RMS 12.0
+#define SINE_SIDE_RATIO 2.5
+static void steady(uint32_t type)
+{
+    static int32_t in[2u * RV_NC], out[2u * VB];
+    double sl = 0, sr = 0, cnt = 0;
+    int32_t ml = 0, mr = 0, l0 = 0, l1 = 0, r0 = 0, r1 = 0;
+    uint32_t b, i;
+    int ok;
+    clean();
+    rv_mix = 100, rv_type = (int32_t)type;
+    rv_size = 80, rv_damp = 48, rv_pre = 16;    /* (the defaults: a case before may have left SIZE at INF) */
+    for (b = 0; b < SINE_BLOCKS; b++) {
+        for (i = 0; i < 2u * RV_NC; i++)
+            in[i] = (int32_t)(SINE_AMP * sin(2.0 * M_PI * 440.0 * (b * 2u * RV_NC + i) / 44100.0));
+        memset(out, 0, sizeof out);
+        hall_render(in, out, 2u * RV_NC);
+        for (i = 0; i < 2u * RV_NC; i++) {
+            int32_t a = out[2u * i] - 2 * l1 + l0, c = out[2u * i + 1u] - 2 * r1 + r0;
+            l0 = l1, l1 = out[2u * i], r0 = r1, r1 = out[2u * i + 1u];
+            if (b < SINE_SKIP)
+                continue;
+            sl += (double)a * a, sr += (double)c * c, cnt++;
+            ml = abs(a) > ml ? abs(a) : ml, mr = abs(c) > mr ? abs(c) : mr;
+        }
+    }
+    sl = sqrt(sl / cnt), sr = sqrt(sr / cnt);
+    ok = ml < SINE_MAX_OVER_RMS * sl && mr < SINE_MAX_OVER_RMS * sr && sl < SINE_SIDE_RATIO * sr && sr < SINE_SIDE_RATIO * sl;
+    cases++;
+    printf("clean: SPACE %-8s a sine held: left %5.1f x rms %.0f, right %5.1f x rms %.0f %s\n", RV_TYPE_NAME[type],
+           ml / sl, sl, mr / sr, sr, ok ? "ok" : "FAIL");
+    fails += !ok;
+}
+
+/* (after Clipper faf4280: its room reverb's loop filter overflowed at low DAMP under a loud sound, a full-scale noise
+ * that went on after the notes) the send at its clamp, DAMP 0, SIZE 120, each type: the return bounded (the bus is
+ * 32 bits; a wrapped product is far past this) and its tail falling: 9 s after the send stops, under half of what
+ * it was at 3 s */
+#define LOUD_BLOCKS 1200u
+#define LOUD_T3 520u                            /* ~3 s of blocks */
+#define LOUD_T9 1560u                           /* ~9 s */
+#define LOUD_IN 262143                          /* the send's clamp (hall_render) */
+#define LOUD_OUT_MAX (1 << 17)
+static void loud(uint32_t type)
+{
+    static int32_t in[2u * RV_NC], out[2u * VB];
+    int32_t peak = 0, t3 = 0, t9 = 0;
+    uint32_t b, i;
+    int ok;
+    clean();
+    rv_mix = 100, rv_type = (int32_t)type;
+    rv_size = 120, rv_damp = 0, rv_pre = 16;
+    for (b = 0; b < LOUD_BLOCKS + LOUD_T9; b++) {
+        for (i = 0; i < 2u * RV_NC; i++)
+            in[i] = b < LOUD_BLOCKS ? (int32_t)(LOUD_IN * sin(2.0 * M_PI * 110.0 * (b * 2u * RV_NC + i) / 44100.0)) : 0;
+        memset(out, 0, sizeof out);
+        hall_render(in, out, 2u * RV_NC);
+        for (i = 0; i < 2u * VB; i++) {
+            int32_t v = abs(out[i]);
+            if (b < LOUD_BLOCKS)
+                peak = v > peak ? v : peak;
+            else if (b == LOUD_BLOCKS + LOUD_T3 - 1u)
+                t3 = v > t3 ? v : t3;
+            else if (b == LOUD_BLOCKS + LOUD_T9 - 1u)
+                t9 = v > t9 ? v : t9;
+        }
+    }
+    ok = peak < LOUD_OUT_MAX && t9 < t3 / 2;
+    cases++;
+    printf("clean: SPACE %-8s the send at its clamp, DAMP 0: peak %6d, tail at 3 s %5d, 9 s %5d %s\n",
+           RV_TYPE_NAME[type], peak, t3, t9, ok ? "ok" : "FAIL");
+    fails += !ok;
+}
+
 int main(void)
 {
     static const char *const ENAME[NENG] = {"VA", "FM", "SAMPLE", "VOICE", "WHEEL", "PHYS", "PHASE"};
@@ -156,6 +238,10 @@ int main(void)
     check("SPACE MIX 0 <-> 127", ENG_VA, ch_rv_mix, 6, 40);
     check("SPACE PRE-DELAY 0 <-> 250 ms", ENG_VA, ch_rv_pre, 6, 60);
     check("SPACE TYPE round HALL PLATE CAVERN SHIMMER", ENG_VA, ch_rv_type, 8, 40);
+    for (e = 0; e < (uint32_t)RV_NTYPE; e++)
+        steady(e);
+    for (e = 0; e < (uint32_t)RV_NTYPE; e++)
+        loud(e);
     for (type_now = RT_PLATE; type_now < (uint32_t)RV_NTYPE; type_now++) {
         snprintf(what, sizeof what, "SPACE %s: SIZE 10 <-> 127", RV_TYPE_NAME[type_now]);
         check(what, ENG_VA, ch_rv_size_t, 6, 60);
