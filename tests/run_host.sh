@@ -17,6 +17,8 @@ for p in sorted(Path("build/host").glob("grimm-*.ppm")):
     print("screen ->", p.with_suffix(".png"))
 PY
 cc -O1 -w -o build/host/enc_test tests/enc_test.c && build/host/enc_test | tail -1   # the knobs' detent decoder (hal/fm1_input.h)
+cc -O1 -w -o build/host/recovery_test tests/recovery_test.c && build/host/recovery_test | tail -1   # the USB rescue's key scan
+cc -O1 -w -o build/host/usb_desc_test tests/usb_desc_test.c && build/host/usb_desc_test | tail -1   # the USB descriptors as a host reads them
 cc "$@" -O2 -w -DAPP_VER="\"test\"" -Ifirmware/src -Ifirmware/gen tests/clean_test.c -lm -o build/host/clean_test && build/host/clean_test | tail -1   # no clicks: every knob under a chord
 cc "$@" -O2 -w -DAPP_VER="\"test\"" -Ifirmware/src -Ifirmware/gen tests/split_test.c -lm -lpthread -o build/host/split_test   # the second core's share
 build/host/split_test | tail -1                                      # (the job inline at the wait)

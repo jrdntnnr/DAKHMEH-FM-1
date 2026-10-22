@@ -257,6 +257,19 @@ and tuning tests passed after rebranding. Compatibility format identifiers
 - **PRE-DELAY's text** (0.5.1) follows the TYPE: HALL's 0 .. 250 ms, the plate family's 0 .. 54 (CAVERN and
   SHIMMER 18 more).
 
+### The rescue that never opened, the audio input macOS 15 never showed (0.5.4)
+
+Both from SLOOP 2.8 (isod89, measured on an FM-1), both in GR!MM too.
+
+- **USB RESCUE** (OCT- at power-on) never opened: the key matrix reads only while PA2, the backlight (active low),
+  is driven low; the ROM and the loaders leave it undriven and `lcd_init` came after the scan, so OCT- was never
+  seen. `recovery_key` now drives the backlight first (`fm1_lcd_backlight_on`, hal). `tests/recovery_test.c` mocks
+  the matrix that way and holds OCT-.
+- **The USB audio input on macOS up to 15**: Apple's driver drops the MIDI interface while it walks the audio
+  control collection and gives up before the audio streaming one, so no input appeared (MIDI worked). The audio
+  streaming interface is listed first now; bcdDevice +0.08, since hosts cache descriptors by version.
+  `tests/usb_desc_test.c` parses the configuration as a host does.
+
 ### Cheshm nazar (0.5.3)
 
 - **HOME's lanterns are glass eyes** (`ui.c` `pic_nazar`), the amulet against the evil eye. One a track, hung over
