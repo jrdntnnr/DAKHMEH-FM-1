@@ -33,10 +33,17 @@
 
 static uint32_t fm1_lcd_timeouts;
 
-FM1_INLINE void fm1_lcd_hw_init(void)
+/* the backlight (PA2, active low) driven on, on its own: the USB rescue's key scan (recovery.c) runs before
+ * fm1_lcd_hw_init, and the key matrix reads only while PA2 is driven low (SLOOP 2.7.2, measured on an FM-1) */
+FM1_INLINE void fm1_lcd_backlight_on(void)
 {
     FM1_LCD_PA_OUT &= ~FM1_LCD_BL;
     FM1_LCD_PA_DIR &= ~FM1_LCD_BL;
+}
+
+FM1_INLINE void fm1_lcd_hw_init(void)
+{
+    fm1_lcd_backlight_on();
     FM1_LCD_IOMAP_CON1 |= 0x10u;
     FM1_LCD_PC_OUT |= FM1_LCD_CS;
     FM1_LCD_PC_OUT &= ~(FM1_LCD_DC | FM1_LCD_CLK | FM1_LCD_DO);

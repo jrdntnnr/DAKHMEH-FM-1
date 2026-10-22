@@ -39,9 +39,16 @@ static void recovery_step(void)
     }
 }
 
+/* the key matrix reads only while PA2, the backlight (active low), is driven low: the ROM and the loaders leave it
+ * undriven, and lcd_init comes after this scan, so OCT- was never seen and the rescue never opened (SLOOP 2.7.2,
+ * measured on an FM-1). The backlight comes on ~50 ms earlier */
+#ifndef RECOVERY_KEYS_ON
+#define RECOVERY_KEYS_ON() fm1_lcd_backlight_on()
+#endif
 static int recovery_key(void)
 {
     uint32_t start = fm1_ticks();
+    RECOVERY_KEYS_ON();
     fm1_input_init();
     do {
         fm1_wdt_feed();
